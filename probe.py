@@ -40,6 +40,17 @@ active = True
 exit = False
 halt = False
 quit = False
+home = False
+homing = False
+move = False
+moving = False
+move_stepsize_xy = 2
+move_stepsize_z = 2
+
+#current position
+ender_X = 0.0
+ender_Y = 0.0
+ender_Z = 0.0
 
 frame = None
 frame_cnt = 0
@@ -72,7 +83,7 @@ thr_val = [105, 125, 130, 115, 125]
 
 
 
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(int(sys.argv[3]))
 
 ini_con = cap.get(cv2.CAP_PROP_CONTRAST)
 ini_bri = cap.get(cv2.CAP_PROP_BRIGHTNESS)
@@ -117,13 +128,20 @@ def overlay(img):
 
     ovtext(img, "FPS %3.1f" % (frame_fps), (10, 30))
     ovtext(img, "*%08d" % (prev_frame_cnt), (240, 30))
+    ovtext(img, "X:%3.2f Y:%3.2f Z:%3.2f" % (ender_X, ender_Y, ender_Z), (720, 30))
+    ovtext(img, "Stepsize(XY):%3.2f Stepsize(Z):%3.2f" % (move_stepsize_xy, move_stepsize_z), (1080, 30))
 
-    if enable:
-        ovtext(img, "ENABLED", (480, 30))
+    if homing:
+        ovtext(img, "HOMING", (10, 64))
+    elif moving:
+        ovtext(img, "MOVING", (10, 64))
     elif halt:
         ovtext(img, "HALTING", (10, 64))
     elif quit:
         ovtext(img, "EXITING", (10, 64))
+
+    if enable:
+        ovtext(img, "ENABLED", (480, 30))
     else:
         ovtext(img, "ACTIVE", (10, 64))
 
@@ -171,7 +189,7 @@ def choice(img):
 def capture():
     global frame, frame_cnt, frame_cnt_cond
     global frame_time, frame_delta, frame_fps
-    global cap, exit
+    global cap, exit, home, homing, move, moving
 
     frame_time = time()
     fps = [0]*25
@@ -322,8 +340,11 @@ def analyze():
         analysis_delta = (analysis_time - mark)*1000
 
 
+def gcode(ser, cmd):
+    ser.write(cmd + b'\n')
+
 def ender():
-    global ser, exit
+    global ser, exit, home, homing, move, moving, ender_X, ender_Y, ender_Z
     init = True
 
     while not exit:
@@ -332,13 +353,51 @@ def ender():
                 res = ser.readline()
                 init = False
                 print("SER:", res)
+
+            #print('Ender: homing.')
+            #gcode(ser, b'G28')
+
+            #print('Ender: Setting Units to Millimeters.')
+            #gcode(ser, b'G21')
+            #response: N: b'echo:Unknown command: "G21"\n'
+
+
+
     
         elif ser.in_waiting > 0:
             res = ser.readline()
+            #line = 
+            if (res.find("X:0.00 Y:0.00 Z:0.00 E:0.00 Count X:0 Y:0 Z:0".encode()) >= 0):
+                homing = False
+
+            if (res.find("E:0.00 Count".encode()) >= 0):
+                moving = False
+                A = [_.split(b':') for _ in res.rstrip().split(b' ')]
+                ender_X = float(A[0][1])
+                ender_Y = float(A[1][1])
+                ender_Z = float(A[2][1])
+
             print("N:", res)
 
+
         else:
-            print("X")
+            if home:
+                print('Ender: homing.')
+                gcode(ser, b'G28')
+                home = False
+                homing = True
+
+            if move:
+                print('Ender: Move.')
+                gcode(ser, b'G0 F400') # set the feedrate to 400
+                gcode(ser, b'G91') # set relative position mode
+                #gcode(ser, b'G0 ' + move.encode())
+                print (b'G0 ' + move.encode())
+                gcode(ser, b'M114')
+                move = False
+                moving = True
+
+            #print("X")
 
         sleep(0.05)
 
@@ -355,8 +414,10 @@ def engine():
 win_flags = cv2.WINDOW_AUTOSIZE | cv2.WINDOW_GUI_NORMAL
 
 cv2.namedWindow('Capture', win_flags)
-cv2.resizeWindow('Capture', 1920, 1080)
+#cv2.resize(
+cv2.resizeWindow('Capture', 800, 450)
 cv2.moveWindow('Capture', 900, 64) 
+
 # cv2.setMouseCallback("Capture", mouse_event)
 
 capture_thread = Thread(target=capture)
@@ -393,7 +454,14 @@ try:
             #cobj = [str(min(9,_)) for _ in ana_obj]
             #ovtext(img, ".".join(cobj), (480, 64))
 
-            cv2.imshow('Capture', img)
+            scale_percent = 50 # percent of original size
+            width = int(img.shape[1] * scale_percent / 100)
+            height = int(img.shape[0] * scale_percent / 100)
+            dim = (width, height) 
+
+            resized = cv2.resize(img, dim, interpolation = cv2.INTER_AREA) 
+
+            cv2.imshow('Capture', resized)
 
         if prev_analysis_cnt != analysis_cnt:
             img = analysis
@@ -402,8 +470,15 @@ try:
             overana(img)
             #choice(img)
 
+            scale_percent = 70 # percent of original size
+            width = int(img.shape[1] * scale_percent / 100)
+            height = int(img.shape[0] * scale_percent / 100)
+            dim = (width, height) 
 
-            cv2.imshow('Analyze', img)
+            resized = cv2.resize(img, dim, interpolation = cv2.INTER_AREA) 
+
+
+            cv2.imshow('Analyze', resized)
 
             # print(ana_obj, ana_pos, ana_pas)
 
@@ -418,10 +493,26 @@ try:
             enable = False
         elif key == ord('e'):   # enable
             enable = True
-        elif key == ord('h'):   # halt
-            halt = True
+        #elif key == ord('h'):   # halt
+            #halt = True
         elif key == ord('q'):   # quit
             quit = True
+        elif key == ord('h'):   # home
+            home = True
+
+        #Movements
+        elif key == 85:   # move higher
+            move = "Z" + str(move_stepsize_z)
+        elif key == 86:   # move lower
+            move = "Z-" + str(move_stepsize_z)
+        elif key == 83:   # move right
+            move = "X" + str(move_stepsize_xy) 
+        elif key == 81:   # move left
+            move = "X-" + str(move_stepsize_xy) 
+        elif key == 82:   # move up
+            move = "Y" + str(move_stepsize_xy) 
+        elif key == 84:   # move down
+            move = "Y-" + str(move_stepsize_xy)
 
         elif key == ord('1'):   # thr[0]--
             thr_val[0] -= 1
