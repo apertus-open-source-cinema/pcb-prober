@@ -44,8 +44,9 @@ home = False
 homing = False
 move = False
 moving = False
-move_stepsize_xy = 2
-move_stepsize_z = 2
+move_stepsize_xy = 2.0
+move_stepsize_z = 2.0
+focus_height_z = 6.0
 
 #current position
 ender_X = 0.0
@@ -129,7 +130,7 @@ def overlay(img):
     ovtext(img, "FPS %3.1f" % (frame_fps), (10, 30))
     ovtext(img, "*%08d" % (prev_frame_cnt), (240, 30))
     ovtext(img, "X:%3.2f Y:%3.2f Z:%3.2f" % (ender_X, ender_Y, ender_Z), (720, 30))
-    ovtext(img, "Stepsize(XY):%3.2f Stepsize(Z):%3.2f" % (move_stepsize_xy, move_stepsize_z), (1080, 30))
+    ovtext(img, "Stepsize(XY): %3.2fmm Stepsize(Z): %3.2fmm" % (move_stepsize_xy, move_stepsize_z), (1120, 30))
 
     if homing:
         ovtext(img, "HOMING", (10, 64))
@@ -391,8 +392,8 @@ def ender():
                 print('Ender: Move.')
                 gcode(ser, b'G0 F400') # set the feedrate to 400
                 gcode(ser, b'G91') # set relative position mode
-                #gcode(ser, b'G0 ' + move.encode())
-                print (b'G0 ' + move.encode())
+                gcode(ser, b'G0 ' + move.encode())
+                #print (b'G0 ' + move.encode())
                 gcode(ser, b'M114')
                 move = False
                 moving = True
@@ -416,7 +417,7 @@ win_flags = cv2.WINDOW_AUTOSIZE | cv2.WINDOW_GUI_NORMAL
 cv2.namedWindow('Capture', win_flags)
 #cv2.resize(
 cv2.resizeWindow('Capture', 800, 450)
-cv2.moveWindow('Capture', 900, 64) 
+cv2.moveWindow('Capture', 0, 0) 
 
 # cv2.setMouseCallback("Capture", mouse_event)
 
@@ -425,7 +426,7 @@ capture_thread.start()
 
 cv2.namedWindow('Analyze', win_flags)
 cv2.resizeWindow('Analyze', ana_size[0], ana_size[1])
-cv2.moveWindow('Analyze', 900, 1200) 
+cv2.moveWindow('Analyze', 810, 0) 
 
 analyze_thread = Thread(target=analyze)
 analyze_thread.start()
@@ -530,6 +531,22 @@ try:
             thr_val[3] -= 1
         elif key == ord('8'):   # thr[3]++
             thr_val[3] += 1
+
+        #step sizes
+        elif key == ord('9'):   
+            move_stepsize_xy -= 0.1
+            if move_stepsize_xy < 0.1:
+                move_stepsize_xy = 0.1
+        elif key == ord('0'):   
+            move_stepsize_xy += 0.1
+        elif key == ord('o'):   
+            move_stepsize_z -= 0.1
+            if move_stepsize_z < 0.1:
+                move_stepsize_z = 0.1
+        elif key == ord('p'):   
+            move_stepsize_z += 0.1
+            if move_stepsize_z > 2.0:
+                move_stepsize_z = 2.0
 
         elif key == 255:        # nokey
             pass
