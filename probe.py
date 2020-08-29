@@ -355,15 +355,15 @@ def ender():
                 init = False
                 print("SER:", res)
 
-            #print('Ender: homing.')
-            #gcode(ser, b'G28')
+            print('Ender: homing.')
+            gcode(ser, b'G28')
+            homing = True
 
-            #print('Ender: Setting Units to Millimeters.')
-            #gcode(ser, b'G21')
-            #response: N: b'echo:Unknown command: "G21"\n'
-
-
-
+            print('Ender: Move to Start Position.')
+            gcode(ser, b'G0 F400') # set the feedrate to 400
+            gcode(ser, b'G0 X0 Y0 Z' + str(focus_height_z).encode())
+            gcode(ser, b'M114')
+            moving = True
     
         elif ser.in_waiting > 0:
             res = ser.readline()
@@ -390,7 +390,7 @@ def ender():
 
             if move:
                 print('Ender: Move.')
-                gcode(ser, b'G0 F400') # set the feedrate to 400
+                gcode(ser, b'G0 F800') # set the feedrate to 400
                 gcode(ser, b'G91') # set relative position mode
                 gcode(ser, b'G0 ' + move.encode())
                 #print (b'G0 ' + move.encode())
@@ -505,7 +505,8 @@ try:
         elif key == 85:   # move higher
             move = "Z" + str(move_stepsize_z)
         elif key == 86:   # move lower
-            move = "Z-" + str(move_stepsize_z)
+            if (ender_Z >= move_stepsize_z + focus_height_z):
+                move = "Z-" + str(move_stepsize_z)
         elif key == 83:   # move right
             move = "X" + str(move_stepsize_xy) 
         elif key == 81:   # move left
