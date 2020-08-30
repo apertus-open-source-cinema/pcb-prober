@@ -5,6 +5,7 @@
 import sys
 import cv2
 import numpy as np
+import json
 
 import errno
 import posix
@@ -53,6 +54,20 @@ ender_X = 0.0
 ender_Y = 0.0
 ender_Z = 0.0
 
+
+#fiducials
+data = {}
+
+def safetofile():
+    with open('prober.json', 'w') as f:
+        json.dump(data, f)
+
+f = open('prober.json')
+data = json.load(f)
+
+camera_to_probe_offset_x = 0.0
+camera_to_probe_offset_y = 0.0
+
 frame = None
 frame_cnt = 0
 frame_cnt_lock = Lock()
@@ -81,7 +96,6 @@ ana_idx = -1
 ana_seq = [0]*5
 
 thr_val = [105, 125, 130, 115, 125]
-
 
 
 cap = cv2.VideoCapture(int(sys.argv[3]))
@@ -131,6 +145,12 @@ def overlay(img):
     ovtext(img, "*%08d" % (prev_frame_cnt), (240, 30))
     ovtext(img, "X:%3.2f Y:%3.2f Z:%3.2f" % (ender_X, ender_Y, ender_Z), (720, 30))
     ovtext(img, "Stepsize(XY): %3.2fmm Stepsize(Z): %3.2fmm" % (move_stepsize_xy, move_stepsize_z), (1120, 30))
+
+    #fiducials
+    ovtext(img, "Fid 1: %3.2f, %3.2f" % (data['fiducial'][0]['x'], data['fiducial'][0]['y']), (10, 120))
+    ovtext(img, "Fid 2: %3.2f, %3.2f" % (data['fiducial'][1]['x'], data['fiducial'][1]['y']), (10, 160))
+    ovtext(img, "Fid 3: %3.2f, %3.2f" % (data['fiducial'][2]['x'], data['fiducial'][2]['y']), (10, 200))
+    ovtext(img, "Fid 4: %3.2f, %3.2f" % (data['fiducial'][3]['x'], data['fiducial'][3]['y']), (10, 240))
 
     if homing:
         ovtext(img, "HOMING", (10, 64))
@@ -488,6 +508,7 @@ try:
         key = cv2.waitKey(1) & 0xFF
 
         if key == 27:           # escape
+            safetofile()
             exit = True
 
         elif key == ord('c'):   # continue
@@ -563,6 +584,21 @@ try:
             move_stepsize_z += 0.1
             if move_stepsize_z > 2.0:
                 move_stepsize_z = 2.0
+
+        elif key == ord('v'): # fid1
+            data['fiducial'][0]['x'] = ender_X
+            data['fiducial'][0]['y'] = ender_Y
+        elif key == ord('b'):  # fid2
+            data['fiducial'][1]['x'] = ender_X
+            data['fiducial'][1]['y'] = ender_Y
+        elif key == ord('n'):  # fid3
+            data['fiducial'][2]['x'] = ender_X
+            data['fiducial'][2]['y'] = ender_Y
+        elif key == ord('m'):  # fid4
+            data['fiducial'][3]['x'] = ender_X
+            data['fiducial'][3]['y'] = ender_Y
+        elif key == ord('x'):  # move to next fid
+            print("x key")
 
         elif key == 255:        # nokey
             pass
