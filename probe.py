@@ -361,7 +361,7 @@ def ender():
 
             print('Ender: Move to Start Position.')
             gcode(ser, b'G0 F400') # set the feedrate to 400
-            gcode(ser, b'G0 X0 Y0 Z' + str(focus_height_z).encode())
+            gcode(ser, b'G0 X0 Y0 Z' + str(focus_height_z).encode()) # move to safe z height
             gcode(ser, b'M114')
             moving = True
     
@@ -385,15 +385,17 @@ def ender():
             if home:
                 print('Ender: homing.')
                 gcode(ser, b'G28')
+                gcode(ser, b'G0 X0 Y0 Z' + str(focus_height_z).encode()) # move to safe z height
+                gcode(ser, b'M114')
                 home = False
                 homing = True
 
             if move:
                 print('Ender: Move.')
-                gcode(ser, b'G0 F800') # set the feedrate to 400
+                gcode(ser, b'G0 F800') # set the feedrate to 800
                 gcode(ser, b'G91') # set relative position mode
                 gcode(ser, b'G0 ' + move.encode())
-                #print (b'G0 ' + move.encode())
+                #print (b'G0 ' + move.encode()) # debug
                 gcode(ser, b'M114')
                 move = False
                 moving = True

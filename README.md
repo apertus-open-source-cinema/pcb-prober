@@ -48,6 +48,9 @@ o = decrease Stepsize(Z) - limit: 0.1mm
 
 p = increase Stepsize(Z) - limit: 2mm
 
+h = home machine - performed at startup
+
+ESCAPE = quit
 
 # Pi Zero
 Prepare ports, set outputs:
