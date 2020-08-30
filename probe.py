@@ -150,7 +150,7 @@ def overlay(img):
     ovtext(img, "Stepsize(XY): %3.2fmm Stepsize(Z): %3.2fmm" % (move_stepsize_xy, move_stepsize_z), (1120, 30))
 
     #fiducials
-    ox1, oy1, ow1, oh1 = 0, 90, 400, 160
+    ox1, oy1, ow1, oh1 = 0, 90, 450, 160
     sub2 = img[oy1:oy1+oh1, ox1:ox1+ow1]
     img[oy1:oy1+oh1, ox1:ox1+ow1] = sub2 >> 1    #dark background
     ovtext(img, "Fid 1 (v): %3.2f, %3.2f" % (data['fiducial'][0]['x'], data['fiducial'][0]['y']), (10, 120))
@@ -419,7 +419,7 @@ def ender():
 
             if move:
                 print('Ender: Move.')
-                gcode(ser, b'G0 F800') # set the feedrate to 800
+                gcode(ser, b'G0 F1600') # set the feedrate to 800
                 gcode(ser, b'G91') # set relative position mode
                 gcode(ser, b'G0 ' + move.encode())
                 #print (b'G0 ' + move.encode()) # debug
@@ -429,7 +429,7 @@ def ender():
 
             if move_abs:
                 print('Ender: Move to Position: %s' % move_abs)
-                gcode(ser, b'G0 F800')  # set the feedrate to 800
+                gcode(ser, b'G0 F1600')  # set the feedrate to 800
                 gcode(ser, b'G90')  # set absolute position mode
                 gcode(ser, b'G0 ' + move_abs.encode())
                 #print (b'G0 ' + move_abs.encode()) # debug
