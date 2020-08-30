@@ -25,3 +25,17 @@ sudo chmod a+rw /dev/ttyUSB0
 
 ./probe.py /dev/ttyUSB0 1000000 0
 ```
+
+
+# Pi Zero
+Prepare ports, set outputs:
+```
+gpio -g mode  12 out
+gpio -g mode  13 out
+```
+
+Turn on Lights:
+```
+gpio -g write  12 1
+gpio -g write  13 1
+```
