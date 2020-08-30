@@ -45,6 +45,7 @@ home = False
 homing = False
 move = False
 moving = False
+move_abs = False
 move_stepsize_xy = 2.0
 move_stepsize_z = 2.0
 focus_height_z = 6.0
@@ -64,6 +65,7 @@ def safetofile():
 
 f = open('prober.json')
 data = json.load(f)
+fid_hightlight_index = 0;
 
 camera_to_probe_offset_x = 0.0
 camera_to_probe_offset_y = 0.0
@@ -129,8 +131,9 @@ def ovtext(img, txt="test", pos=(0,0), col=(255,255,255)):
 def overlay(img):
     ox, oy, ow, oh = 4, 4, 1920-8, 32
 
+
     sub = img[oy:oy+oh, ox:ox+ow]
-    img[oy:oy+oh, ox:ox+ow] = sub >> 1
+    img[oy:oy+oh, ox:ox+ow] = sub >> 1    #dark background
 
     rx0, ry0, rx1, ry1 = ana_roi
     cx, cy, r = int((rx0+rx1)/2), int((ry0+ry1)/2), 64
@@ -147,10 +150,14 @@ def overlay(img):
     ovtext(img, "Stepsize(XY): %3.2fmm Stepsize(Z): %3.2fmm" % (move_stepsize_xy, move_stepsize_z), (1120, 30))
 
     #fiducials
-    ovtext(img, "Fid 1: %3.2f, %3.2f" % (data['fiducial'][0]['x'], data['fiducial'][0]['y']), (10, 120))
-    ovtext(img, "Fid 2: %3.2f, %3.2f" % (data['fiducial'][1]['x'], data['fiducial'][1]['y']), (10, 160))
-    ovtext(img, "Fid 3: %3.2f, %3.2f" % (data['fiducial'][2]['x'], data['fiducial'][2]['y']), (10, 200))
-    ovtext(img, "Fid 4: %3.2f, %3.2f" % (data['fiducial'][3]['x'], data['fiducial'][3]['y']), (10, 240))
+    ox1, oy1, ow1, oh1 = 0, 90, 400, 160
+    sub2 = img[oy1:oy1+oh1, ox1:ox1+ow1]
+    img[oy1:oy1+oh1, ox1:ox1+ow1] = sub2 >> 1    #dark background
+    ovtext(img, "Fid 1 (v): %3.2f, %3.2f" % (data['fiducial'][0]['x'], data['fiducial'][0]['y']), (10, 120))
+    ovtext(img, "Fid 2 (b): %3.2f, %3.2f" % (data['fiducial'][1]['x'], data['fiducial'][1]['y']), (10, 160))
+    ovtext(img, "Fid 3 (n): %3.2f, %3.2f" % (data['fiducial'][2]['x'], data['fiducial'][2]['y']), (10, 200))
+    ovtext(img, "Fid 4 (m): %3.2f, %3.2f" % (data['fiducial'][3]['x'], data['fiducial'][3]['y']), (10, 240))
+    cv2.rectangle(img, (0, fid_hightlight_index * 40 + 125),(8 ,fid_hightlight_index * 40 + 95), (0, 98, 255), -1)
 
     if homing:
         ovtext(img, "HOMING", (10, 64))
@@ -365,7 +372,7 @@ def gcode(ser, cmd):
     ser.write(cmd + b'\n')
 
 def ender():
-    global ser, exit, home, homing, move, moving, ender_X, ender_Y, ender_Z
+    global ser, exit, home, homing, move, moving, move_abs, ender_X, ender_Y, ender_Z
     init = True
 
     while not exit:
@@ -418,6 +425,16 @@ def ender():
                 #print (b'G0 ' + move.encode()) # debug
                 gcode(ser, b'M114')
                 move = False
+                moving = True
+
+            if move_abs:
+                print('Ender: Move to Position: %s' % move_abs)
+                gcode(ser, b'G0 F800')  # set the feedrate to 800
+                gcode(ser, b'G90')  # set absolute position mode
+                gcode(ser, b'G0 ' + move_abs.encode())
+                #print (b'G0 ' + move_abs.encode()) # debug
+                gcode(ser, b'M114')
+                move_abs = False
                 moving = True
 
             #print("X")
@@ -585,6 +602,7 @@ try:
             if move_stepsize_z > 2.0:
                 move_stepsize_z = 2.0
 
+        #fiducials
         elif key == ord('v'): # fid1
             data['fiducial'][0]['x'] = ender_X
             data['fiducial'][0]['y'] = ender_Y
@@ -599,6 +617,12 @@ try:
             data['fiducial'][3]['y'] = ender_Y
         elif key == ord('x'):  # move to next fid
             print("x key")
+        elif key == 9:  # select next fid
+            fid_hightlight_index+= 1
+            if fid_hightlight_index > 3:
+                fid_hightlight_index = 0
+        elif key == 10: # move to selected fiducial
+            move_abs = "X" + str(data['fiducial'][fid_hightlight_index]['x']) + " Y" + str(data['fiducial'][fid_hightlight_index]['y'])
 
         elif key == 255:        # nokey
             pass

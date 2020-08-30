@@ -16,9 +16,13 @@ sudo apt install python3-opencv, python3-serial
 ```
 did the trick.
 
-To allow non-root to access the serial port:
+To allow temporary non-root to access the serial port:
 ```
 sudo chmod a+rw /dev/ttyUSB0
+```
+to make it permanent edit the udev rules (filling in your own idVendor and idProduct):
+```
+ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6010", MODE="0660", GROUP="dialout"
 ```
 # Usage
 ```
