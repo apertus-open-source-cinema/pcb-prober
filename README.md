@@ -52,7 +52,21 @@ o = decrease Stepsize(Z) - limit: 0.1mm
 
 p = increase Stepsize(Z) - limit: 2mm
 
-h = home machine - performed at startup
+h = manually home machine - normally performed at startup
+
+TAB = cycle selection through the 4 fiducials
+
+ENTER = move camera to selected fiducial
+
+v = set current camera location as fiducial 1 location
+
+b = set current camera location as fiducial 2 location
+
+n = set current camera location as fiducial 3 location
+
+m = set current camera location as fiducial 4 location
+
+
 
 ESCAPE = quit
 
@@ -67,4 +81,15 @@ Turn on Lights:
 ```
 gpio -g write  12 1
 gpio -g write  13 1
+```
+
+# OpenCV Image Analysis
+The image is converted to HSV color space.
+
+The 5 filter parameters editable with number keys 1 to 8 do:
+```
+[0] and [1] define the hue (H) range (displayed in red color)
+[2] saturation (S) cut off (displayed in green color)
+[3] value (V) cut off (displayed in blue color)
+[4] size limiter - not editable currently
 ```

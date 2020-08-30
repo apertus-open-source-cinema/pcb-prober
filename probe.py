@@ -69,6 +69,7 @@ fid_hightlight_index = 0;
 
 camera_to_probe_offset_x = 0.0
 camera_to_probe_offset_y = 0.0
+camera_pixels_per_mm = 333 # measured at slightly above work height of 6mm
 
 frame = None
 frame_cnt = 0
@@ -97,7 +98,7 @@ ana_pas = [0]*4
 ana_idx = -1
 ana_seq = [0]*5
 
-thr_val = [105, 125, 130, 115, 125]
+thr_val = [56, 231, 68, 209, 125]
 
 
 cap = cv2.VideoCapture(int(sys.argv[3]))
@@ -464,8 +465,8 @@ capture_thread = Thread(target=capture)
 capture_thread.start()
 
 cv2.namedWindow('Analyze', win_flags)
-cv2.resizeWindow('Analyze', ana_size[0], ana_size[1])
-cv2.moveWindow('Analyze', 810, 0) 
+cv2.resizeWindow('Analyze', int(ana_size[0]/2), int(ana_size[1]/2))
+cv2.moveWindow('Analyze', 961, 0)
 
 analyze_thread = Thread(target=analyze)
 analyze_thread.start()
@@ -621,8 +622,10 @@ try:
             fid_hightlight_index+= 1
             if fid_hightlight_index > 3:
                 fid_hightlight_index = 0
-        elif key == 10: # move to selected fiducial
+        elif key == 10: # ENTER: move to selected fiducial
             move_abs = "X" + str(data['fiducial'][fid_hightlight_index]['x']) + " Y" + str(data['fiducial'][fid_hightlight_index]['y'])
+        elif key == 32:  # Space: center to closest detected circle
+            i=1 # TODO
 
         elif key == 255:        # nokey
             pass
