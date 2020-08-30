@@ -534,12 +534,25 @@ try:
             thr_val[3] += 1
 
         #step sizes
-        elif key == ord('9'):   
-            move_stepsize_xy -= 0.1
-            if move_stepsize_xy < 0.1:
-                move_stepsize_xy = 0.1
-        elif key == ord('0'):   
-            move_stepsize_xy += 0.1
+        elif key == ord('9'):
+            if move_stepsize_xy >= 6:
+                move_stepsize_xy -= 1
+            elif move_stepsize_xy <= 5.9 and move_stepsize_xy > 0.1:
+                move_stepsize_xy -= 0.1
+            elif move_stepsize_xy <= 0.1:
+                move_stepsize_xy -= 0.01
+
+            if move_stepsize_xy < 0.01:
+                move_stepsize_xy = 0.01
+
+        elif key == ord('0'):
+            if move_stepsize_xy >= 5:
+                move_stepsize_xy += 1
+            elif move_stepsize_xy <= 5 and move_stepsize_xy > 0.09:
+                move_stepsize_xy += 0.1
+            elif move_stepsize_xy <= 0.09:
+                move_stepsize_xy += 0.01
+
         elif key == ord('o'):   
             move_stepsize_z -= 0.1
             if move_stepsize_z < 0.1:

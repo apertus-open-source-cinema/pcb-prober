@@ -1,5 +1,6 @@
 # pcb-prober
-An open hardware/free software low tech flying-probe tester based on available technology (3d printer mechanics/controller, raspberry pie, openCV, etc.)
+An open hardware/free software low tech flying-probe tester based on available 
+technology (3D printer mechanics/controller, raspberry pi, openCV, etc.)
 
 
 
@@ -25,6 +26,27 @@ sudo chmod a+rw /dev/ttyUSB0
 
 ./probe.py /dev/ttyUSB0 1000000 0
 ```
+
+# Keyboard Shortcuts
+Arrow Up = move Stepsize(XY) upwards
+
+Arrow Down = move Stepsize(XY) downwards
+
+Arrow Left = move Stepsize(XY) left
+
+Arrow Right = move Stepsize(XY) right
+
+Page Up = move Stepsize(Z) higher
+
+Page Down = move Stepsize(Z) lower - limit: 6mm - to prevent crashing needle into board
+
+9 = decrease Stepsize(XY) - limit: 0.01mm
+
+0 = increase Stepsize(XY)
+
+o = decrease Stepsize(Z) - limit: 0.1mm
+
+p = increase Stepsize(Z) - limit: 2mm
 
 
 # Pi Zero
