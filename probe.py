@@ -69,7 +69,7 @@ fid_hightlight_index = 0;
 
 camera_to_probe_offset_x = 0.0
 camera_to_probe_offset_y = 0.0
-camera_pixels_per_mm = 333 # measured at slightly above work height of 6mm
+camera_pixels_per_mm = 380 # measured at slightly above work height of 6mm
 
 frame = None
 frame_cnt = 0
@@ -93,7 +93,7 @@ ana_roi = (int((1920 - ana_size[0])/2),
            int((1080 - ana_size[1])/2) + ana_size[1])
 
 ana_obj = [0]*4
-ana_pos = [0]*4
+ana_pos = [0]*2
 ana_pas = [0]*4
 ana_idx = -1
 ana_seq = [0]*5
@@ -325,41 +325,21 @@ def analyze():
         for idx, kp in enumerate(kpt):
             xf, yf = kp.pt
             x, y = int(round(xf)), int(round(yf))
+            #interesting = False
 
             pos[idx] = (x, y)
+
+            #print(pos[idx])
 
             if kp.size < thr_val[4]:
                 ovtext(img, "%3d" % kp.size, (x-30, y-8), (0,0,0))
             else:
-                ovtext(img, "%3d" % kp.size, (x-30, y-8), (255,255,255))
-
-        #    if x < split:
-        #        obj[i] += 1
-        #        if x > limit and x < purge and pos[i] < x:
-        #            pos[i] = x
-        #        cv2.circle(img, (x, y), 15, col[i], -1)
-        #    else:
-        #        x -= split
-        #        if pas[i] < x:
-        #            pas[i] = x
-
-        #ana_obj = obj[0:4].copy()
-        #ana_pos = pos[0:4].copy()
-        #ana_pas = pas[0:4].copy()
-
-        #max_val = max(ana_pos)
-        #max_idx = ana_pos.index(max_val)
-
-        #if max_val > 0:
-        #    seq = ana_seq
-        #    seq = [max_idx] + seq[:-1]
-        #    idx = max(seq, key=seq.count)
-        #    ana_idx = idx
-        #    ana_seq = seq
-        #else:
-        #    ana_idx = -1
-
-        #this[ry0:ry1, rx0:rx1] = img
+                if 300 < pos[idx][0] < 420 and 300 < pos[idx][1] < 420:
+                    ovtext(img, "%3d" % kp.size, (x - 30, y - 8), (0, 0, 255))
+                    # interesting = True
+                    ana_pos = pos[idx]
+                else:
+                    ovtext(img, "%3d" % kp.size, (x - 30, y - 8), (255, 255, 255))
 
         analysis = img
         analysis_cnt += 1
@@ -420,19 +400,49 @@ def ender():
 
             if move:
                 print('Ender: Move.')
-                gcode(ser, b'G0 F1600') # set the feedrate to 800
+                gcode(ser, b'G0 F3000') # set the feedrate to 1600
                 gcode(ser, b'G91') # set relative position mode
-                gcode(ser, b'G0 ' + move.encode())
-                #print (b'G0 ' + move.encode()) # debug
+
+                parts = [_.split(' ') for _ in move.rstrip().split(' ')]
+                if len(parts) == 1:
+                    if parts[0][0][:1] == 'X':
+                        x = float(parts[0][0][1:])
+                        moveparts = 'X' + str(round(x,3) + 0.5) + ' Y0.5'
+                    else:
+                        y = float(parts[0][0][1:])
+                        moveparts = 'X0.5 Y' + str(round(y,3) + 0.5)
+                elif len(parts) == 2:
+                    x = float(parts[0][0][1:])
+                    y = float(parts[1][0][1:])
+                    moveparts = 'X' + str(round(x,3) + 0.5) + ' Y' + str(round(y,3) + 0.5)
+
+                gcode(ser, b'G0' + moveparts.encode())
+                print (b'G0 ' + moveparts.encode()) # debug
+
+                gcode(ser, b'G0 X-0.5 Y-0.5') #backlash compensation: always approach each point from same side
+                print(b'G0 X-0.5 Y-0.5')  # debug
+
                 gcode(ser, b'M114')
                 move = False
                 moving = True
 
             if move_abs:
                 print('Ender: Move to Position: %s' % move_abs)
-                gcode(ser, b'G0 F1600')  # set the feedrate to 800
+                gcode(ser, b'G0 F3000')  # set the feedrate to 800
                 gcode(ser, b'G90')  # set absolute position mode
-                gcode(ser, b'G0 ' + move_abs.encode())
+
+                parts = [_.split(' ') for _ in move_abs.rstrip().split(' ')]
+                x = float(parts[0][0][1:])
+                y = float(parts[1][0][1:])
+                movepart1 = 'X' + str(x + 0.5) + ' Y' + str(y + 0.5)
+                movepart2 = 'X' + str(x) + ' Y' + str(y)
+
+                print(b'G0 ' + movepart1.encode()) #backlash compensation: always approach each point from same side
+                print(b'G0 ' + movepart2.encode())
+                gcode(ser, b'G0 ' + movepart1.encode())  # backlash compensation: always approach each point from same side
+                gcode(ser, b'G0 ' + movepart2.encode())
+
+                #gcode(ser, b'G0 ' + move_abs.encode())
                 #print (b'G0 ' + move_abs.encode()) # debug
                 gcode(ser, b'M114')
                 move_abs = False
@@ -625,8 +635,10 @@ try:
         elif key == 10: # ENTER: move to selected fiducial
             move_abs = "X" + str(data['fiducial'][fid_hightlight_index]['x']) + " Y" + str(data['fiducial'][fid_hightlight_index]['y'])
         elif key == 32:  # Space: center to closest detected circle
-            i=1 # TODO
-
+            if (ana_pos[0]-360 <100 and ana_pos[1]-360 < 100):
+                print("correction: X:" + str((ana_pos[0]-360)/camera_pixels_per_mm) + " Y:" + str((ana_pos[1]-360)/-camera_pixels_per_mm))
+                move = "X" + str(round((ana_pos[0]-360)/camera_pixels_per_mm, 2)) + " Y" + str(round((ana_pos[1]-360)/-camera_pixels_per_mm, 2))
+                print(move)
         elif key == 255:        # nokey
             pass
 
