@@ -61,6 +61,8 @@ TAB = cycle selection through the 4 fiducials
 
 ENTER = move camera to selected fiducial
 
+SPACE = optically center crosshair to centered fiducial - requires to be within the fiducial circle already
+
 v = set current camera location as fiducial 1 location
 
 b = set current camera location as fiducial 2 location
