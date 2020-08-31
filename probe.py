@@ -1,6 +1,19 @@
 #!/usr/bin/env python3
 #
-# Copyright (C) 2020 Herbert Poetzl
+# Copyright (C) 2020 Herbert Poetzl, Sebastian Pichelhofer
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import sys
 import cv2
@@ -44,11 +57,14 @@ quit = False
 home = False
 homing = False
 move = False
+moveZ = False
 moving = False
 move_abs = False
 move_stepsize_xy = 2.0
 move_stepsize_z = 2.0
 focus_height_z = 6.0
+pcb_height_z = 5.0
+
 
 #current position
 ender_X = 0.0
@@ -353,7 +369,7 @@ def gcode(ser, cmd):
     ser.write(cmd + b'\n')
 
 def ender():
-    global ser, exit, home, homing, move, moving, move_abs, ender_X, ender_Y, ender_Z
+    global ser, exit, home, homing, move, moving, move_abs, moveZ, ender_X, ender_Y, ender_Z
     init = True
 
     while not exit:
@@ -398,6 +414,16 @@ def ender():
                 home = False
                 homing = True
 
+            if moveZ:
+                print('Ender: Move Z.')
+                gcode(ser, b'G0 F300')  # set the feedrate to 1600
+                gcode(ser, b'G91')  # set relative position mode
+                gcode(ser, b'G0 ' + moveZ.encode())
+                print(b'G0 ' + moveZ.encode())  # debug
+                gcode(ser, b'M114')
+                moveZ = False
+                moving = True
+
             if move:
                 print('Ender: Move.')
                 gcode(ser, b'G0 F3000') # set the feedrate to 1600
@@ -408,7 +434,7 @@ def ender():
                     if parts[0][0][:1] == 'X':
                         x = float(parts[0][0][1:])
                         moveparts = 'X' + str(round(x,3) + 0.5) + ' Y0.5'
-                    else:
+                    elif parts[0][0][:1] == 'Y':
                         y = float(parts[0][0][1:])
                         moveparts = 'X0.5 Y' + str(round(y,3) + 0.5)
                 elif len(parts) == 2:
@@ -554,10 +580,10 @@ try:
 
         #Movements
         elif key == 85:   # move higher
-            move = "Z" + str(move_stepsize_z)
+            moveZ = "Z" + str(move_stepsize_z)
         elif key == 86:   # move lower
-            if (ender_Z >= move_stepsize_z + focus_height_z):
-                move = "Z-" + str(move_stepsize_z)
+            if (ender_Z >= move_stepsize_z + focus_height_z): #prevent crashing into PCB
+                moveZ = "Z-" + str(move_stepsize_z)
         elif key == 83:   # move right
             move = "X" + str(move_stepsize_xy) 
         elif key == 81:   # move left
