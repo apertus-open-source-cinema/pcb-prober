@@ -30,6 +30,9 @@ ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6010", MODE="0660", GROUP="dialout"
 
 ./probe.py /dev/ttyUSB0 1000000 0
 ```
+Note that backlash compensation is active and results in each point 
+being approached from the same side. This means small distance movements result 
+in the machine moving at least 0.5mm on each axis.
 
 # Keyboard Shortcuts
 Arrow Up = move Stepsize(XY) upwards

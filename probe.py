@@ -69,7 +69,7 @@ fid_hightlight_index = 0;
 
 camera_to_probe_offset_x = 0.0
 camera_to_probe_offset_y = 0.0
-camera_pixels_per_mm = 380 # measured at slightly above work height of 6mm
+camera_pixels_per_mm = 270 # measured at slightly above work height of 6mm
 
 frame = None
 frame_cnt = 0
