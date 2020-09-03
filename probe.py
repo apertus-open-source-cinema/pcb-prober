@@ -29,6 +29,8 @@ import serial
 from time import sleep, time
 from random import randint
 
+import transforms3d as t3d
+
 from threading import Thread, Condition, Lock
 
 
@@ -62,8 +64,9 @@ moving = False
 move_abs = False
 move_stepsize_xy = 2.0
 move_stepsize_z = 2.0
-focus_height_z = 6.0
+focus_height_z = 6.0 # 6mm to protect into crashing PCB
 pcb_height_z = 5.0
+probing_height = 2.3 # at this height the probe needle slightly touches the PCB
 
 
 #current position
@@ -83,8 +86,8 @@ f = open('prober.json')
 data = json.load(f)
 fid_hightlight_index = 0;
 
-camera_to_probe_offset_x = 0.0
-camera_to_probe_offset_y = 0.0
+camera_to_probe_offset_x = 27.56
+camera_to_probe_offset_y = 0.73
 camera_pixels_per_mm = 270 # measured at slightly above work height of 6mm
 
 frame = None
@@ -133,6 +136,55 @@ cap.set(cv2.CAP_PROP_SATURATION, 0.15)
 
 
 col = [(0,0,255), (0,200,255), (255,50,50), (0,200,0), (255,255,255), (0,0,0)]
+
+# load test points from file
+# TODO
+
+# fiducials
+
+P = np.array([[data['fiducial'][0]['x'], data['fiducial'][0]['y'], pcb_height_z],
+              [data['fiducial'][1]['x'], data['fiducial'][1]['y'], pcb_height_z],
+              [data['fiducial'][2]['x'], data['fiducial'][2]['y'], pcb_height_z],
+              [data['fiducial'][3]['x'], data['fiducial'][3]['y'], pcb_height_z]])
+
+# transformation
+
+T = [0.5, 0.6, 0.7]
+R = t3d.euler.euler2mat(0.1, 0.2, 0.3, 'sxyz')
+Z = [0.5, 0.4, 0.3]
+
+# transformation matrix
+
+A = t3d.affines.compose(T,R,Z)
+
+# transformed points
+
+Q = np.dot(P, A[0:3,0:3]) + A[0:3,3]
+
+
+
+# calculate matrix from points
+
+n = P.shape[0]
+pad = lambda x: np.hstack([x, np.ones((x.shape[0], 1))])
+unpad = lambda x: x[:,:-1]
+
+X = pad(P)
+Y = pad(Q)
+
+B, res, rank, s = np.linalg.lstsq(X, Y, rcond=None)
+
+trans = lambda x: unpad(np.dot(pad(x), B))
+
+
+
+# create some new points
+
+p = np.array([(P[_]+P[(_+1)%4])/2 for _ in range(4)])
+
+# transform those points
+
+q = trans(p)
 
 
 def ovtext(img, txt="test", pos=(0,0), col=(255,255,255)):
