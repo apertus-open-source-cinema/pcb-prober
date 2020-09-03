@@ -2,6 +2,11 @@
 
 Extracts pad position and dimensions from EAGLE .brd file to .csv, for automated PCB inspection
 
+# Requirements
+
+drawSvg and dataclasses python module:
+`pip install drawSvg, dataclasses`
+
 ## Limitations
 
 * Some hardcoded values
