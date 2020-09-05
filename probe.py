@@ -84,7 +84,9 @@ def safetofile():
 
 f = open('prober.json')
 data = json.load(f)
+
 fid_hightlight_index = 0;
+pad_hightlight_index = 0;
 
 camera_to_probe_offset_x = -27.56
 camera_to_probe_offset_y = -0.73
@@ -161,6 +163,8 @@ with open('pcb.csv', newline='') as csvfile:
         if (row[1] == "FID4"):
             fid4_detected = True
         testpads[int(row[0])]['net'] = row[10]
+        testpads[int(row[0])]['trans-x'] = 0.0
+        testpads[int(row[0])]['trans-y'] = 0.0
 
 # print (testpads) # debug
 
@@ -175,14 +179,27 @@ if not fid1_detected or not fid2_detected or not fid3_detected or not fid4_detec
 else:
     print("CSV: finding 4 fiducials: success")
 
+def findkey(dict, key, search):
+    for item in dict.items():
+        #print(item[1])
+        if item[1][key] == search:
+            return item
+
 # fiducials
 
-P = np.array([[data['fiducial'][0]['x'], data['fiducial'][0]['y'], pcb_height_z],
-              [data['fiducial'][1]['x'], data['fiducial'][1]['y'], pcb_height_z],
-              [data['fiducial'][2]['x'], data['fiducial'][2]['y'], pcb_height_z],
-              [data['fiducial'][3]['x'], data['fiducial'][3]['y'], pcb_height_z]])
+#print(findkey(testpads, 'partname', 'FID1')) # debug
 
+P = np.array([[float(findkey(testpads, 'partname', 'FID1')[1]['x']), float(findkey(testpads, 'partname', 'FID1')[1]['y']), pcb_height_z],
+              [float(findkey(testpads, 'partname', 'FID2')[1]['x']), float(findkey(testpads, 'partname', 'FID2')[1]['y']), pcb_height_z],
+              [float(findkey(testpads, 'partname', 'FID3')[1]['x']), float(findkey(testpads, 'partname', 'FID3')[1]['y']), pcb_height_z],
+              [float(findkey(testpads, 'partname', 'FID4')[1]['x']), float(findkey(testpads, 'partname', 'FID4')[1]['y']), pcb_height_z]])
+#print (P)
 # transformation
+#
+# P die FID Positionen von Bandit
+# Q die eingemessenen FID positionen vom prober
+# p sind dann die testpad positionen (Bandit)
+# und q die testpad anzufahrenden positionen fuer den prober
 
 T = [0.5, 0.6, 0.7]
 R = t3d.euler.euler2mat(0.1, 0.2, 0.3, 'sxyz')
@@ -194,8 +211,12 @@ A = t3d.affines.compose(T, R, Z)
 
 # transformed points
 
-Q = np.dot(P, A[0:3, 0:3]) + A[0:3, 3]
-
+#Q = np.dot(P, A[0:3, 0:3]) + A[0:3, 3]
+Q = np.array([[data['fiducial'][0]['x'], data['fiducial'][0]['y'], pcb_height_z],
+              [data['fiducial'][1]['x'], data['fiducial'][1]['y'], pcb_height_z],
+              [data['fiducial'][2]['x'], data['fiducial'][2]['y'], pcb_height_z],
+              [data['fiducial'][3]['x'], data['fiducial'][3]['y'], pcb_height_z]])
+#print (Q)
 # calculate matrix from points
 
 n = P.shape[0]
@@ -211,12 +232,30 @@ trans = lambda x: unpad(np.dot(pad(x), B))
 
 # create some new points
 
-p = np.array([(P[_] + P[(_ + 1) % 4]) / 2 for _ in range(4)])
+#p = np.array([(P[_] + P[(_ + 1) % 4]) / 2 for _ in range(4)])
+p = np.array([[float(testpads[0]['x']), float(testpads[0]['y']), pcb_height_z],
+              [float(testpads[1]['x']), float(testpads[1]['y']), pcb_height_z],
+              [float(testpads[2]['x']), float(testpads[2]['y']), pcb_height_z]])
+
+
 
 # transform those points
 
 q = trans(p)
 
+#print (q) #debug
+
+#test
+testpads[0]['trans-x'] = q[0][0];
+testpads[0]['trans-y'] = q[0][1];
+
+testpads[1]['trans-x'] = q[1][0];
+testpads[1]['trans-y'] = q[1][1];
+
+testpads[2]['trans-x'] = q[2][0];
+testpads[2]['trans-y'] = q[2][1];
+
+#print(testpads) # debug
 
 def ovtext(img, txt="test", pos=(0, 0), col=(255, 255, 255)):
     font = cv2.FONT_HERSHEY_SIMPLEX
@@ -249,7 +288,7 @@ def overlay(img):
     ovtext(img, "Stepsize(XY): %3.2fmm Stepsize(Z): %3.2fmm" % (move_stepsize_xy, move_stepsize_z), (1120, 30))
 
     # fiducials
-    ox1, oy1, ow1, oh1 = 0, 90, 450, 160
+    ox1, oy1, ow1, oh1 = 0, 90, 450, 240
     sub2 = img[oy1:oy1 + oh1, ox1:ox1 + ow1]
     img[oy1:oy1 + oh1, ox1:ox1 + ow1] = sub2 >> 1  # dark background
     ovtext(img, "Fid 1 (v): %3.2f, %3.2f" % (data['fiducial'][0]['x'], data['fiducial'][0]['y']), (10, 120))
@@ -257,6 +296,9 @@ def overlay(img):
     ovtext(img, "Fid 3 (n): %3.2f, %3.2f" % (data['fiducial'][2]['x'], data['fiducial'][2]['y']), (10, 200))
     ovtext(img, "Fid 4 (m): %3.2f, %3.2f" % (data['fiducial'][3]['x'], data['fiducial'][3]['y']), (10, 240))
     cv2.rectangle(img, (0, fid_hightlight_index * 40 + 125), (8, fid_hightlight_index * 40 + 95), (0, 98, 255), -1)
+
+    ovtext(img, "Pad: %s (%s) X: %3.2f Y:%3.2f" % (testpads[pad_hightlight_index]['partname'], testpads[pad_hightlight_index]['net'],
+                                        float(testpads[pad_hightlight_index]['trans-x']), float(testpads[pad_hightlight_index]['trans-y'])), (10, 320))
 
     if homing:
         ovtext(img, "HOMING", (10, 64))
@@ -733,15 +775,16 @@ try:
         elif key == ord('m'):  # fid4
             data['fiducial'][3]['x'] = ender_X
             data['fiducial'][3]['y'] = ender_Y
-        elif key == ord('x'):  # move to next fid
-            print("x key")
-        elif key == 9:  # select next fid
+
+        elif key == 9:  # TAB select next fid
             fid_hightlight_index += 1
             if fid_hightlight_index > 3:
                 fid_hightlight_index = 0
+
         elif key == 10:  # ENTER: move to selected fiducial
             move_abs = "X" + str(data['fiducial'][fid_hightlight_index]['x']) + " Y" + str(
                 data['fiducial'][fid_hightlight_index]['y'])
+
         elif key == 32:  # Space: center to closest detected circle
             if (ana_pos[0] - 360 < 100 and ana_pos[1] - 360 < 100):
                 print("correction: X:" + str((ana_pos[0] - 360) / camera_pixels_per_mm) + " Y:" + str(
@@ -753,6 +796,15 @@ try:
         elif key == 106:  # J key: test needle offset
             move_abs = "X" + str(data['fiducial'][fid_hightlight_index]['x'] + camera_to_probe_offset_x) + " Y" + str(
                 data['fiducial'][fid_hightlight_index]['y'] + camera_to_probe_offset_y)
+
+        elif key == 121:  # Y select next pad
+            pad_hightlight_index += 1
+            if pad_hightlight_index >= len(testpads)-1:
+                pad_hightlight_index = 0
+
+        elif key == ord('x'):  # X move camera to selected pad
+            move_abs = "X" + str(round(testpads[pad_hightlight_index]['trans-x'], 2)) + " Y" + str(
+                round(testpads[pad_hightlight_index]['trans-y'],2 ))
 
         elif key == 255:  # nokey
             pass
