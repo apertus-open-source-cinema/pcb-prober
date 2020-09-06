@@ -62,11 +62,12 @@ move = False
 moveZ = False
 moving = False
 move_abs = False
+moveZ_abs = False
 move_stepsize_xy = 2.0
 move_stepsize_z = 2.0
 focus_height_z = 6.0  # 6mm to protect into crashing PCB
 pcb_height_z = 5.0
-probing_height = 2.3  # at this height the probe needle slightly touches the PCB
+probing_height = 4.0 # set above the pcb to safety for now, set to 2.3 at this height the probe needle slightly touches the PCB
 
 # current position
 ender_X = 0.0
@@ -479,7 +480,7 @@ def gcode(ser, cmd):
 
 
 def ender():
-    global ser, exit, home, homing, move, moving, move_abs, moveZ, ender_X, ender_Y, ender_Z
+    global ser, exit, home, homing, move, moving, move_abs, moveZ, moveZ_abs, ender_X, ender_Y, ender_Z
     init = True
 
     while not exit:
@@ -523,17 +524,15 @@ def ender():
                 home = False
                 homing = True
 
-            if moveZ:
-                print('Ender: Move Z.')
-                gcode(ser, b'G0 F300')  # set the feedrate to 1600
-                gcode(ser, b'G91')  # set relative position mode
-                gcode(ser, b'G0 ' + moveZ.encode())
-                print(b'G0 ' + moveZ.encode())  # debug
-                gcode(ser, b'M114')
-                moveZ = False
-                moving = True
-
             if move:
+
+                # safety: never move while the probe is down
+                if (ender_Z < focus_height_z):
+                    print('Ender: Move Z to safe distance first')
+                    gcode(ser, b'G90')  # set absolute position mode
+                    gcode(ser, b'G0 Z' + str(focus_height_z).encode())  # move to safe z height
+                    gcode(ser, b'M114')
+
                 print('Ender: Move.')
                 gcode(ser, b'G0 F3000')  # set the feedrate to 1600
                 gcode(ser, b'G91')  # set relative position mode
@@ -563,25 +562,50 @@ def ender():
 
             if move_abs:
                 print('Ender: Move to Position: %s' % move_abs)
-                gcode(ser, b'G0 F3000')  # set the feedrate to 800
+                gcode(ser, b'G0 F3000')  # set the feedrate
                 gcode(ser, b'G90')  # set absolute position mode
+
+                # safety: never move while the probe is down
+                if (ender_Z < focus_height_z):
+                    print('Ender: Move Z to safe distance first')
+                    gcode(ser, b'G90')  # set absolute position mode
+                    gcode(ser, b'G0 Z' + str(focus_height_z).encode())  # move to safe z height
+                    gcode(ser, b'M114')
 
                 parts = [_.split(' ') for _ in move_abs.rstrip().split(' ')]
                 x = float(parts[0][0][1:])
                 y = float(parts[1][0][1:])
-                movepart1 = 'X' + str(x + 0.5) + ' Y' + str(y + 0.5)
+                movepart1 = 'X' + str(x + 0.5) + ' Y' + str(y + 0.5) # backlash compensation
                 movepart2 = 'X' + str(x) + ' Y' + str(y)
 
-                print(b'G0 ' + movepart1.encode())  # backlash compensation: always approach each point from same side
-                print(b'G0 ' + movepart2.encode())
-                gcode(ser,
-                      b'G0 ' + movepart1.encode())  # backlash compensation: always approach each point from same side
+                #print(b'G0 ' + movepart1.encode())  # backlash compensation: always approach each point from same side
+                #print(b'G0 ' + movepart2.encode())
+                gcode(ser, b'G0 ' + movepart1.encode())  # backlash compensation: always approach each point from same side
                 gcode(ser, b'G0 ' + movepart2.encode())
 
                 # gcode(ser, b'G0 ' + move_abs.encode())
                 # print (b'G0 ' + move_abs.encode()) # debug
                 gcode(ser, b'M114')
                 move_abs = False
+                moving = True
+
+            if moveZ_abs:
+                print('Ender: Move to Position: %s' % moveZ_abs)
+                gcode(ser, b'G0 F500')  # set the feedrate
+                gcode(ser, b'G90')  # set absolute position mode
+                gcode(ser, b'G0 ' + moveZ_abs.encode())
+                gcode(ser, b'M114')
+                moveZ_abs = False
+                moving = True
+
+            if moveZ:
+                print('Ender: Move Z.')
+                gcode(ser, b'G0 F300')  # set the feedrate to 1600
+                gcode(ser, b'G91')  # set relative position mode
+                gcode(ser, b'G0 ' + moveZ.encode())
+                print(b'G0 ' + moveZ.encode())  # debug
+                gcode(ser, b'M114')
+                moveZ = False
                 moving = True
 
             # print("X")
@@ -670,12 +694,10 @@ try:
             safetofile()
             exit = True
 
-        elif key == ord('c'):  # continue
-            halt = False
-        elif key == ord('d'):  # disable
-            enable = False
-        elif key == ord('e'):  # enable
-            enable = True
+        #elif key == ord('c'):  # continue
+        #    halt = False
+        #elif key == ord('e'):  # enable
+        #    enable = True
         # elif key == ord('h'):   # halt
         # halt = True
         elif key == ord('q'):  # quit
@@ -775,18 +797,30 @@ try:
                     round((ana_pos[1] - 360) / -camera_pixels_per_mm, 2))
                 print(move)
 
-        elif key == 106:  # J key: test needle offset
-            move_abs = "X" + str(data['fiducial'][fid_hightlight_index]['x'] + camera_to_probe_offset_x) + " Y" + str(
-                data['fiducial'][fid_hightlight_index]['y'] + camera_to_probe_offset_y)
+        #elif key == 106:  # J key: test needle offset
+           # move_abs = "X" + str(data['fiducial'][fid_hightlight_index]['x'] + camera_to_probe_offset_x) + " Y" + str(
+              #  data['fiducial'][fid_hightlight_index]['y'] + camera_to_probe_offset_y)
 
-        elif key == 121:  # Y select next pad
+        elif key == ord('a'):  # A - cycle through testpads
             pad_hightlight_index += 1
             if pad_hightlight_index >= len(testpads)-1:
                 pad_hightlight_index = 0
 
-        elif key == ord('x'):  # X move camera to selected pad
+        elif key == ord('s'):  # S - move camera to selected testpad
             move_abs = "X" + str(round(testpads[pad_hightlight_index]['trans-x'], 2)) + " Y" + str(
                 round(testpads[pad_hightlight_index]['trans-y'],2 ))
+
+        elif key == ord('d'):  # D - move camera to selected testpad
+            move_abs = "X" + str(round(testpads[pad_hightlight_index]['trans-x'], 2) + camera_to_probe_offset_x) + " Y" + str(
+                testpads[pad_hightlight_index]['trans-y'] + camera_to_probe_offset_y)
+            moveZ_abs = "Z" + str(probing_height)
+            #print (test)
+            #print(test2)
+            #move_abs = "X" + str(round(testpads[pad_hightlight_index]['trans-x'], 2)) + " Y" + str(
+            #     round(testpads[pad_hightlight_index]['trans-y'],2 ))
+
+        elif key == ord('f'):  # F - move to safe z height
+            moveZ_abs = "Z" + str(focus_height_z)
 
         elif key == 255:  # nokey
             pass

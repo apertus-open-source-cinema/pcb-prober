@@ -74,7 +74,13 @@ n = set current camera location as fiducial 3 location
 
 m = set current camera location as fiducial 4 location
 
+a = cycle selection through the testpads
 
+s = move camera to selected testpads
+
+d = probe here (camera crosshair)
+
+f = raise probe to safe height
 
 ESCAPE = quit
 
