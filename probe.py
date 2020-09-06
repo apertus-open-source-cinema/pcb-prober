@@ -151,8 +151,8 @@ with open('pcb.csv', newline='') as csvfile:
         if (row[0] == "INDEX" or row[0] == ""):
             continue  # skip header or empty rows
         testpads[int(row[0])] = {}
-        testpads[int(row[0])]['x'] = row[5]
-        testpads[int(row[0])]['y'] = row[6]
+        testpads[int(row[0])]['x'] = float(row[5])
+        testpads[int(row[0])]['y'] = float(row[6])
         testpads[int(row[0])]['partname'] = row[1]
         if (row[1] == "FID1"):
             fid1_detected = True
@@ -230,30 +230,13 @@ B, res, rank, s = np.linalg.lstsq(X, Y, rcond=None)
 
 trans = lambda x: unpad(np.dot(pad(x), B))
 
-# create some new points
-
-#p = np.array([(P[_] + P[(_ + 1) % 4]) / 2 for _ in range(4)])
-p = np.array([[float(testpads[0]['x']), float(testpads[0]['y']), pcb_height_z],
-              [float(testpads[1]['x']), float(testpads[1]['y']), pcb_height_z],
-              [float(testpads[2]['x']), float(testpads[2]['y']), pcb_height_z]])
-
-
-
-# transform those points
-
-q = trans(p)
-
-#print (q) #debug
-
-#test
-testpads[0]['trans-x'] = q[0][0];
-testpads[0]['trans-y'] = q[0][1];
-
-testpads[1]['trans-x'] = q[1][0];
-testpads[1]['trans-y'] = q[1][1];
-
-testpads[2]['trans-x'] = q[2][0];
-testpads[2]['trans-y'] = q[2][1];
+for key, value in testpads.items():
+    if value['partname'] != "FID1" or value['partname'] != "FID2" or value['partname'] != "FID3" or value['partname'] != "FID4":
+        p = np.array([[value['x'], value['y'], pcb_height_z]])
+        q = trans(p)
+        #print(q) #debug
+        value['trans-x'] = round(q[0][0], 2)
+        value['trans-y'] = round(q[0][1], 2)
 
 #print(testpads) # debug
 
@@ -288,7 +271,7 @@ def overlay(img):
     ovtext(img, "Stepsize(XY): %3.2fmm Stepsize(Z): %3.2fmm" % (move_stepsize_xy, move_stepsize_z), (1120, 30))
 
     # fiducials
-    ox1, oy1, ow1, oh1 = 0, 90, 450, 240
+    ox1, oy1, ow1, oh1 = 0, 90, 600, 240
     sub2 = img[oy1:oy1 + oh1, ox1:ox1 + ow1]
     img[oy1:oy1 + oh1, ox1:ox1 + ow1] = sub2 >> 1  # dark background
     ovtext(img, "Fid 1 (v): %3.2f, %3.2f" % (data['fiducial'][0]['x'], data['fiducial'][0]['y']), (10, 120))
@@ -297,7 +280,7 @@ def overlay(img):
     ovtext(img, "Fid 4 (m): %3.2f, %3.2f" % (data['fiducial'][3]['x'], data['fiducial'][3]['y']), (10, 240))
     cv2.rectangle(img, (0, fid_hightlight_index * 40 + 125), (8, fid_hightlight_index * 40 + 95), (0, 98, 255), -1)
 
-    ovtext(img, "Pad: %s (%s) X: %3.2f Y:%3.2f" % (testpads[pad_hightlight_index]['partname'], testpads[pad_hightlight_index]['net'],
+    ovtext(img, "Pad (%d): %s (%s) X: %3.2f Y:%3.2f" % (pad_hightlight_index, testpads[pad_hightlight_index]['partname'], testpads[pad_hightlight_index]['net'],
                                         float(testpads[pad_hightlight_index]['trans-x']), float(testpads[pad_hightlight_index]['trans-y'])), (10, 320))
 
     if homing:
@@ -530,7 +513,6 @@ def ender():
                 ender_Z = float(A[2][1])
 
             print("N:", res)
-
 
         else:
             if home:
