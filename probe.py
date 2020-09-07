@@ -196,66 +196,64 @@ def findkey(dict, key, search):
             return item
 
 
-# fiducials
+def transformpoints():
+    # print(findkey(testpads, 'partname', 'FID1')) # debug
 
-# print(findkey(testpads, 'partname', 'FID1')) # debug
+    # transformation explanation
+    #
+    # P are the fiducial positions from CSV (PCB)
+    # Q are the fiducial positions in prober space
+    # p are the testpad positions from CSV (PCB)
+    # resulting: q are the testpad positions in prober space
 
-P = np.array([[float(findkey(testpads, 'partname', 'FID1')[1]['x']),
-               float(findkey(testpads, 'partname', 'FID1')[1]['y']), pcb_height_z],
-              [float(findkey(testpads, 'partname', 'FID2')[1]['x']),
-               float(findkey(testpads, 'partname', 'FID2')[1]['y']), pcb_height_z],
-              [float(findkey(testpads, 'partname', 'FID3')[1]['x']),
-               float(findkey(testpads, 'partname', 'FID3')[1]['y']), pcb_height_z],
-              [float(findkey(testpads, 'partname', 'FID4')[1]['x']),
-               float(findkey(testpads, 'partname', 'FID4')[1]['y']), pcb_height_z]])
-# print (P)
-# transformation
-#
-# P die FID Positionen von Bandit
-# Q die eingemessenen FID positionen vom prober
-# p sind dann die testpad positionen (Bandit)
-# und q die testpad anzufahrenden positionen fuer den prober
+    P = np.array([[float(findkey(testpads, 'partname', 'FID1')[1]['x']),
+                   float(findkey(testpads, 'partname', 'FID1')[1]['y']), pcb_height_z],
+                  [float(findkey(testpads, 'partname', 'FID2')[1]['x']),
+                   float(findkey(testpads, 'partname', 'FID2')[1]['y']), pcb_height_z],
+                  [float(findkey(testpads, 'partname', 'FID3')[1]['x']),
+                   float(findkey(testpads, 'partname', 'FID3')[1]['y']), pcb_height_z],
+                  [float(findkey(testpads, 'partname', 'FID4')[1]['x']),
+                   float(findkey(testpads, 'partname', 'FID4')[1]['y']), pcb_height_z]])
+    # print (P) # debug
 
-T = [0.5, 0.6, 0.7]
-R = t3d.euler.euler2mat(0.1, 0.2, 0.3, 'sxyz')
-Z = [0.5, 0.4, 0.3]
+    T = [0.5, 0.6, 0.7]
+    R = t3d.euler.euler2mat(0.1, 0.2, 0.3, 'sxyz')
+    Z = [0.5, 0.4, 0.3]
 
-# transformation matrix
+    # transformation matrix
+    A = t3d.affines.compose(T, R, Z)
 
-A = t3d.affines.compose(T, R, Z)
+    # transformed points
+    Q = np.array([[data['fiducial'][0]['x'], data['fiducial'][0]['y'], pcb_height_z],
+                  [data['fiducial'][1]['x'], data['fiducial'][1]['y'], pcb_height_z],
+                  [data['fiducial'][2]['x'], data['fiducial'][2]['y'], pcb_height_z],
+                  [data['fiducial'][3]['x'], data['fiducial'][3]['y'], pcb_height_z]])
+    # print (Q) # debug
 
-# transformed points
+    # calculate matrix from points
+    n = P.shape[0]
+    pad = lambda x: np.hstack([x, np.ones((x.shape[0], 1))])
+    unpad = lambda x: x[:, :-1]
 
-# Q = np.dot(P, A[0:3, 0:3]) + A[0:3, 3]
-Q = np.array([[data['fiducial'][0]['x'], data['fiducial'][0]['y'], pcb_height_z],
-              [data['fiducial'][1]['x'], data['fiducial'][1]['y'], pcb_height_z],
-              [data['fiducial'][2]['x'], data['fiducial'][2]['y'], pcb_height_z],
-              [data['fiducial'][3]['x'], data['fiducial'][3]['y'], pcb_height_z]])
-# print (Q)
-# calculate matrix from points
+    X = pad(P)
+    Y = pad(Q)
 
-n = P.shape[0]
-pad = lambda x: np.hstack([x, np.ones((x.shape[0], 1))])
-unpad = lambda x: x[:, :-1]
+    B, res, rank, s = np.linalg.lstsq(X, Y, rcond=None)
 
-X = pad(P)
-Y = pad(Q)
+    trans = lambda x: unpad(np.dot(pad(x), B))
 
-B, res, rank, s = np.linalg.lstsq(X, Y, rcond=None)
-
-trans = lambda x: unpad(np.dot(pad(x), B))
-
-for key, value in testpads.items():
-    if value['partname'] != "FID1" or value['partname'] != "FID2" or value['partname'] != "FID3" or value[
-        'partname'] != "FID4":
-        p = np.array([[value['x'], value['y'], pcb_height_z]])
-        q = trans(p)
-        # print(q) #debug
-        value['trans-x'] = round(q[0][0], 2)
-        value['trans-y'] = round(q[0][1], 2)
+    for key, value in testpads.items():
+        if value['partname'] != "FID1" or value['partname'] != "FID2" or value['partname'] != "FID3" or value[
+            'partname'] != "FID4":
+            p = np.array([[value['x'], value['y'], pcb_height_z]])
+            q = trans(p)
+            # print(q) #debug
+            value['trans-x'] = round(q[0][0], 2)
+            value['trans-y'] = round(q[0][1], 2)
+    # print(testpads) # debug
 
 
-# print(testpads) # debug
+transformpoints()
 
 def ovtext(img, txt="test", pos=(0, 0), col=(255, 255, 255)):
     font = cv2.FONT_HERSHEY_SIMPLEX
@@ -788,19 +786,23 @@ try:
             if move_stepsize_z > 2.0:
                 move_stepsize_z = 2.0
 
-        # fiducials
+        # set fiducial locations
         elif key == ord('v'):  # fid1
             data['fiducial'][0]['x'] = ender_X
             data['fiducial'][0]['y'] = ender_Y
+            transformpoints()
         elif key == ord('b'):  # fid2
             data['fiducial'][1]['x'] = ender_X
             data['fiducial'][1]['y'] = ender_Y
+            transformpoints()
         elif key == ord('n'):  # fid3
             data['fiducial'][2]['x'] = ender_X
             data['fiducial'][2]['y'] = ender_Y
+            transformpoints()
         elif key == ord('m'):  # fid4
             data['fiducial'][3]['x'] = ender_X
             data['fiducial'][3]['y'] = ender_Y
+            transformpoints()
 
         elif key == 9:  # TAB select next fid
             fid_hightlight_index += 1
