@@ -20,6 +20,7 @@ import cv2
 import numpy as np
 import json
 import csv
+import pprint
 
 import errno
 import posix
@@ -67,7 +68,7 @@ move_stepsize_xy = 2.0
 move_stepsize_z = 2.0
 focus_height_z = 6.0  # 6mm to protect into crashing PCB
 pcb_height_z = 5.0
-probing_height = 4.0 # set above the pcb to safety for now, set to 2.3 at this height the probe needle slightly touches the PCB
+probing_height = 4.0  # set above the pcb to safety for now, set to 2.3 at this height the probe needle slightly touches the PCB
 
 # current position
 ender_X = 0.0
@@ -139,34 +140,47 @@ cap.set(cv2.CAP_PROP_SATURATION, 0.15)
 
 col = [(0, 0, 255), (0, 200, 255), (255, 50, 50), (0, 200, 0), (255, 255, 255), (0, 0, 0)]
 
-# load test points from file
-fid1_detected = False
-fid2_detected = False
-fid3_detected = False
-fid4_detected = False
-testpads = {}
-#testpads = [dict() for x in range(n)]
-with open('pcb.csv', newline='') as csvfile:
-    linereader = csv.reader(csvfile, delimiter=';', quotechar='|')
-    for row in linereader:
-        if (row[0] == "INDEX" or row[0] == ""):
-            continue  # skip header or empty rows
-        testpads[int(row[0])] = {}
-        testpads[int(row[0])]['x'] = float(row[5])
-        testpads[int(row[0])]['y'] = float(row[6])
-        testpads[int(row[0])]['partname'] = row[1]
-        if (row[1] == "FID1"):
-            fid1_detected = True
-        if (row[1] == "FID2"):
-            fid2_detected = True
-        if (row[1] == "FID3"):
-            fid3_detected = True
-        if (row[1] == "FID4"):
-            fid4_detected = True
-        testpads[int(row[0])]['net'] = row[10]
-        testpads[int(row[0])]['trans-x'] = 0.0
-        testpads[int(row[0])]['trans-y'] = 0.0
 
+# load test points from CSV file
+
+def loadCSV(filename):
+    fid1_detected = False
+    fid2_detected = False
+    fid3_detected = False
+    fid4_detected = False
+    with open(filename, newline='') as csvfile:
+        linereader = csv.reader(csvfile, delimiter=';', quotechar='|')
+        for row in linereader:
+            if (row[0] == "INDEX" or row[0] == ""):
+                continue  # skip header or empty rows
+            testpads[int(row[0])] = {}
+            testpads[int(row[0])]['x'] = float(row[5])
+            testpads[int(row[0])]['y'] = float(row[6])
+            testpads[int(row[0])]['partname'] = row[1]
+            if (row[1] == "FID1"):
+                fid1_detected = True
+            if (row[1] == "FID2"):
+                fid2_detected = True
+            if (row[1] == "FID3"):
+                fid3_detected = True
+            if (row[1] == "FID4"):
+                fid4_detected = True
+            testpads[int(row[0])]['net'] = row[10]
+            testpads[int(row[0])]['trans-x'] = 0.0
+            testpads[int(row[0])]['trans-y'] = 0.0
+
+    # print (testpads) # debug
+    if not fid1_detected or not fid2_detected or not fid3_detected or not fid4_detected:
+        print("CSV: finding 4 fiducials: failed")
+    else:
+        print("CSV: finding 4 fiducials: success")
+
+
+testpads = {}
+loadCSV('pcb.csv')
+
+
+# pprint.pprint(testpads)
 # print (testpads) # debug
 
 # beta powerboard
@@ -175,26 +189,26 @@ with open('pcb.csv', newline='') as csvfile:
 # 8;FID3;;0;0;-49.53;27.305;0;0;0;FID3
 # 9;FID4;;0;0;49.53;27.305;0;0;0;FID4
 
-if not fid1_detected or not fid2_detected or not fid3_detected or not fid4_detected:
-    print("CSV: finding 4 fiducials: failed")
-else:
-    print("CSV: finding 4 fiducials: success")
-
 def findkey(dict, key, search):
     for item in dict.items():
-        #print(item[1])
+        # print(item[1])
         if item[1][key] == search:
             return item
 
+
 # fiducials
 
-#print(findkey(testpads, 'partname', 'FID1')) # debug
+# print(findkey(testpads, 'partname', 'FID1')) # debug
 
-P = np.array([[float(findkey(testpads, 'partname', 'FID1')[1]['x']), float(findkey(testpads, 'partname', 'FID1')[1]['y']), pcb_height_z],
-              [float(findkey(testpads, 'partname', 'FID2')[1]['x']), float(findkey(testpads, 'partname', 'FID2')[1]['y']), pcb_height_z],
-              [float(findkey(testpads, 'partname', 'FID3')[1]['x']), float(findkey(testpads, 'partname', 'FID3')[1]['y']), pcb_height_z],
-              [float(findkey(testpads, 'partname', 'FID4')[1]['x']), float(findkey(testpads, 'partname', 'FID4')[1]['y']), pcb_height_z]])
-#print (P)
+P = np.array([[float(findkey(testpads, 'partname', 'FID1')[1]['x']),
+               float(findkey(testpads, 'partname', 'FID1')[1]['y']), pcb_height_z],
+              [float(findkey(testpads, 'partname', 'FID2')[1]['x']),
+               float(findkey(testpads, 'partname', 'FID2')[1]['y']), pcb_height_z],
+              [float(findkey(testpads, 'partname', 'FID3')[1]['x']),
+               float(findkey(testpads, 'partname', 'FID3')[1]['y']), pcb_height_z],
+              [float(findkey(testpads, 'partname', 'FID4')[1]['x']),
+               float(findkey(testpads, 'partname', 'FID4')[1]['y']), pcb_height_z]])
+# print (P)
 # transformation
 #
 # P die FID Positionen von Bandit
@@ -212,12 +226,12 @@ A = t3d.affines.compose(T, R, Z)
 
 # transformed points
 
-#Q = np.dot(P, A[0:3, 0:3]) + A[0:3, 3]
+# Q = np.dot(P, A[0:3, 0:3]) + A[0:3, 3]
 Q = np.array([[data['fiducial'][0]['x'], data['fiducial'][0]['y'], pcb_height_z],
               [data['fiducial'][1]['x'], data['fiducial'][1]['y'], pcb_height_z],
               [data['fiducial'][2]['x'], data['fiducial'][2]['y'], pcb_height_z],
               [data['fiducial'][3]['x'], data['fiducial'][3]['y'], pcb_height_z]])
-#print (Q)
+# print (Q)
 # calculate matrix from points
 
 n = P.shape[0]
@@ -232,14 +246,16 @@ B, res, rank, s = np.linalg.lstsq(X, Y, rcond=None)
 trans = lambda x: unpad(np.dot(pad(x), B))
 
 for key, value in testpads.items():
-    if value['partname'] != "FID1" or value['partname'] != "FID2" or value['partname'] != "FID3" or value['partname'] != "FID4":
+    if value['partname'] != "FID1" or value['partname'] != "FID2" or value['partname'] != "FID3" or value[
+        'partname'] != "FID4":
         p = np.array([[value['x'], value['y'], pcb_height_z]])
         q = trans(p)
-        #print(q) #debug
+        # print(q) #debug
         value['trans-x'] = round(q[0][0], 2)
         value['trans-y'] = round(q[0][1], 2)
 
-#print(testpads) # debug
+
+# print(testpads) # debug
 
 def ovtext(img, txt="test", pos=(0, 0), col=(255, 255, 255)):
     font = cv2.FONT_HERSHEY_SIMPLEX
@@ -281,8 +297,9 @@ def overlay(img):
     ovtext(img, "Fid 4 (m): %3.2f, %3.2f" % (data['fiducial'][3]['x'], data['fiducial'][3]['y']), (10, 240))
     cv2.rectangle(img, (0, fid_hightlight_index * 40 + 125), (8, fid_hightlight_index * 40 + 95), (0, 98, 255), -1)
 
-    ovtext(img, "Pad (%d): %s (%s) X: %3.2f Y:%3.2f" % (pad_hightlight_index, testpads[pad_hightlight_index]['partname'], testpads[pad_hightlight_index]['net'],
-                                        float(testpads[pad_hightlight_index]['trans-x']), float(testpads[pad_hightlight_index]['trans-y'])), (10, 320))
+    ovtext(img, "Pad (%d): %s (%s) X: %3.2f Y:%3.2f" % (
+        pad_hightlight_index, testpads[pad_hightlight_index]['partname'], testpads[pad_hightlight_index]['net'],
+        testpads[pad_hightlight_index]['trans-x'], testpads[pad_hightlight_index]['trans-y']), (10, 320))
 
     if homing:
         ovtext(img, "HOMING", (10, 64))
@@ -482,29 +499,33 @@ def gcode(ser, cmd):
 def ender():
     global ser, exit, home, homing, move, moving, move_abs, moveZ, moveZ_abs, ender_X, ender_Y, ender_Z
     init = True
+    ender_ready = False
 
     while not exit:
         if init:
             while ser.in_waiting > 0:
                 res = ser.readline()
                 init = False
+                ender_ready = True
                 print("SER:", res)
 
-            print('Ender: homing.')
-            gcode(ser, b'G28')
-            homing = True
+            if (ender_ready):
+                print('Ender: homing.')
+                gcode(ser, b'G28')
+                homing = True
 
-            print('Ender: Move to Start Position.')
-            gcode(ser, b'G0 F400')  # set the feedrate to 400
-            gcode(ser, b'G0 X0 Y0 Z' + str(focus_height_z).encode())  # move to safe z height
-            gcode(ser, b'M114')
-            moving = True
+                print('Ender: Move to Start Position.')
+                gcode(ser, b'G0 F400')  # set the feedrate (mm/m)
+                gcode(ser, b'G0 X0 Y0 Z' + str(focus_height_z).encode())  # move to safe z height
+                gcode(ser, b'M114')  # report current position
+                moving = True
 
         elif ser.in_waiting > 0:
             res = ser.readline()
             # line =
             if (res.find("X:0.00 Y:0.00 Z:0.00 E:0.00 Count X:0 Y:0 Z:0".encode()) >= 0):
                 homing = False
+                moving = False
 
             if (res.find("E:0.00 Count".encode()) >= 0):
                 moving = False
@@ -534,7 +555,7 @@ def ender():
                     gcode(ser, b'M114')
 
                 print('Ender: Move.')
-                gcode(ser, b'G0 F3000')  # set the feedrate to 1600
+                gcode(ser, b'G0 F3000')  # set the feedrate
                 gcode(ser, b'G91')  # set relative position mode
 
                 parts = [_.split(' ') for _ in move.rstrip().split(' ')]
@@ -575,12 +596,13 @@ def ender():
                 parts = [_.split(' ') for _ in move_abs.rstrip().split(' ')]
                 x = float(parts[0][0][1:])
                 y = float(parts[1][0][1:])
-                movepart1 = 'X' + str(x + 0.5) + ' Y' + str(y + 0.5) # backlash compensation
+                movepart1 = 'X' + str(x + 0.5) + ' Y' + str(y + 0.5)  # backlash compensation
                 movepart2 = 'X' + str(x) + ' Y' + str(y)
 
-                #print(b'G0 ' + movepart1.encode())  # backlash compensation: always approach each point from same side
-                #print(b'G0 ' + movepart2.encode())
-                gcode(ser, b'G0 ' + movepart1.encode())  # backlash compensation: always approach each point from same side
+                # print(b'G0 ' + movepart1.encode())  # backlash compensation: always approach each point from same side
+                # print(b'G0 ' + movepart2.encode())
+                gcode(ser,
+                      b'G0 ' + movepart1.encode())  # backlash compensation: always approach each point from same side
                 gcode(ser, b'G0 ' + movepart2.encode())
 
                 # gcode(ser, b'G0 ' + move_abs.encode())
@@ -694,9 +716,9 @@ try:
             safetofile()
             exit = True
 
-        #elif key == ord('c'):  # continue
+        # elif key == ord('c'):  # continue
         #    halt = False
-        #elif key == ord('e'):  # enable
+        # elif key == ord('e'):  # enable
         #    enable = True
         # elif key == ord('h'):   # halt
         # halt = True
@@ -797,26 +819,27 @@ try:
                     round((ana_pos[1] - 360) / -camera_pixels_per_mm, 2))
                 print(move)
 
-        #elif key == 106:  # J key: test needle offset
-           # move_abs = "X" + str(data['fiducial'][fid_hightlight_index]['x'] + camera_to_probe_offset_x) + " Y" + str(
-              #  data['fiducial'][fid_hightlight_index]['y'] + camera_to_probe_offset_y)
+        # elif key == 106:  # J key: test needle offset
+        # move_abs = "X" + str(data['fiducial'][fid_hightlight_index]['x'] + camera_to_probe_offset_x) + " Y" + str(
+        #  data['fiducial'][fid_hightlight_index]['y'] + camera_to_probe_offset_y)
 
         elif key == ord('a'):  # A - cycle through testpads
             pad_hightlight_index += 1
-            if pad_hightlight_index >= len(testpads)-1:
+            if pad_hightlight_index >= len(testpads) - 1:
                 pad_hightlight_index = 0
 
         elif key == ord('s'):  # S - move camera to selected testpad
             move_abs = "X" + str(round(testpads[pad_hightlight_index]['trans-x'], 2)) + " Y" + str(
-                round(testpads[pad_hightlight_index]['trans-y'],2 ))
+                round(testpads[pad_hightlight_index]['trans-y'], 2))
 
         elif key == ord('d'):  # D - move camera to selected testpad
-            move_abs = "X" + str(round(testpads[pad_hightlight_index]['trans-x'], 2) + camera_to_probe_offset_x) + " Y" + str(
+            move_abs = "X" + str(
+                round(testpads[pad_hightlight_index]['trans-x'], 2) + camera_to_probe_offset_x) + " Y" + str(
                 testpads[pad_hightlight_index]['trans-y'] + camera_to_probe_offset_y)
             moveZ_abs = "Z" + str(probing_height)
-            #print (test)
-            #print(test2)
-            #move_abs = "X" + str(round(testpads[pad_hightlight_index]['trans-x'], 2)) + " Y" + str(
+            # print (test)
+            # print(test2)
+            # move_abs = "X" + str(round(testpads[pad_hightlight_index]['trans-x'], 2)) + " Y" + str(
             #     round(testpads[pad_hightlight_index]['trans-y'],2 ))
 
         elif key == ord('f'):  # F - move to safe z height
