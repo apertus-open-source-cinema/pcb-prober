@@ -69,6 +69,7 @@ pcb_height_z = 5.0
 probing_height = 2.1 #4.0  # set above the pcb to safety for now, set to 2.3 at this height the probe needle slightly touches the PCB
 csv_file = "pcb.csv"
 webcamid = 0
+analyze_filter_id = 0
 
 # current position
 ender_X = 0.0
@@ -384,8 +385,20 @@ def overana(img):
 
     ovtext(img, "%3d %3d %3d %3d %3d" % tuple(thr_val), (10, 64))
 
-    if active:
-        ovtext(img, "ACTIVE", (480, 64))
+    if analyze_filter_id == 0:
+        ovtext(img, "Hue Ch", (480, 64))
+    elif analyze_filter_id == 1:
+        ovtext(img, "Sat Ch", (480, 64))
+    elif analyze_filter_id == 2:
+        ovtext(img, "Val Ch", (480, 64))
+    elif analyze_filter_id == 3:
+        ovtext(img, "Hue Filter", (480, 64))
+    elif analyze_filter_id == 4:
+        ovtext(img, "Sat Filter", (480, 64))
+    elif analyze_filter_id == 5:
+        ovtext(img, "Val Filter", (480, 64))
+    elif analyze_filter_id == 6:
+        ovtext(img, "Mixed Filter", (480, 64))
 
 
 def choice(img):
@@ -481,10 +494,13 @@ def analyze():
         # msk_high = cv2.inRange(hsv, hsv_high[0], hsv_high[1])
         # msk = cv2.bitwise_not(cv2.bitwise_or(msk_grid, msk_high))
         # res = cv2.bitwise_and(roi, roi, mask=msk)
-        h, s, v = hsv[:, :, 0], hsv[:, :, 1], hsv[:, :, 2]
-        ret, ht = cv2.threshold(h, thr_val[0], 0, cv2.THRESH_TOZERO)
-        ret, ht = cv2.threshold(ht, thr_val[1], 0, cv2.THRESH_TOZERO_INV)
-        ret, st = cv2.threshold(s, thr_val[2], 255, cv2.THRESH_BINARY)
+        #h, s, v = hsv[:, :, 0], hsv[:, :, 1], hsv[:, :, 2]
+
+        h, s, v = cv2.split(hsv)
+
+        ret, ht = cv2.threshold(h, thr_val[0], 255, cv2.THRESH_BINARY_INV)
+        ret, ht = cv2.threshold(ht, thr_val[1], 255, cv2.THRESH_BINARY)
+        ret, st = cv2.threshold(s, thr_val[2], 255, cv2.THRESH_BINARY_INV)
         ret, vt = cv2.threshold(v, thr_val[3], 255, cv2.THRESH_BINARY)
         thr = cv2.merge((ht, st, vt))
         # ret, thr = cv2.threshold(s, 80, 250, cv2.THRESH_TOZERO)
@@ -492,11 +508,25 @@ def analyze():
         mor = cv2.morphologyEx(thr, cv2.MORPH_OPEN, kern_open)
         img = cv2.morphologyEx(mor, cv2.MORPH_CLOSE, kern_close)
         # img = cv2.cvtColor(mor, cv2.COLOR_GRAY2RGB)
-        # img = thr
+        #img = thr
 
         kpt = detector.detect(img)
         img = cv2.drawKeypoints(img, kpt, np.array([]), \
                                 (255, 255, 255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+
+        # filter channel display options
+        if analyze_filter_id == 0:
+            img = h
+        elif analyze_filter_id == 1:
+            img = s
+        elif analyze_filter_id == 2:
+            img = v
+        elif analyze_filter_id == 3:
+            img = ht
+        elif analyze_filter_id == 4:
+            img = st
+        elif analyze_filter_id == 5:
+            img = vt
 
         # split = align - rx0
         # limit = finish - rx0
@@ -765,8 +795,12 @@ try:
         #    enable = True
         # elif key == ord('h'):   # halt
         # halt = True
-        elif key == ord('q'):  # quit
-            quit = True
+
+        elif key == ord('q'): #cycle through image analysing filters
+            analyze_filter_id += 1
+            if(analyze_filter_id > 6):
+                analyze_filter_id = 0
+
         elif key == ord('h'):  # home
             home = True
 

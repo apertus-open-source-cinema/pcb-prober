@@ -82,6 +82,24 @@ d = probe here (camera crosshair)
 
 f = raise probe to safe height
 
+1 = decrease hue range filter min
+
+2 = increase hue range filter min
+
+3 = decrease hue range filter max
+
+4 = increase hue range filter max
+
+5 = decrease saturation range filter
+
+6 = increase saturation range filter
+
+7 = decrease value range filter
+
+8 = increase value range filter
+
+q = cycle through filter channel display
+
 ESCAPE = quit
 
 # Pi Zero
