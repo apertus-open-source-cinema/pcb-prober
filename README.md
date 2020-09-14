@@ -26,9 +26,9 @@ ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6010", MODE="0660", GROUP="dialout"
 ```
 # Usage
 ```
-./probe.py <serial device> <serial device baud rate> <webcam id>
+./probe.py -i <CSV file> -c <webcam ID> -b <baud rate> -u <Marlin serial USB device>
 
-./probe.py /dev/ttyUSB0 1000000 0
+./probe.py -u /dev/ttyUSB0 -b 1000000 -c 0 -i probe.csv
 ```
 Note that backlash compensation is active and results in each point 
 being approached from the same side. This means that even small distance movements result 

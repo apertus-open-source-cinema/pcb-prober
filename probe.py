@@ -21,22 +21,19 @@ import numpy as np
 import json
 import csv
 import pprint
-
+import getopt
+import serial
 import errno
 import posix
 import struct
-
-import serial
-
 from time import sleep, time
 from random import randint
-
 import transforms3d as t3d
-
 from threading import Thread, Condition, Lock
 
-tty = sys.argv[1]
-baud = int(sys.argv[2])
+
+tty = '/dev/ttyUSB0' #sys.argv[1]
+baud = 1000000 #int(sys.argv[2])
 
 ser = serial.Serial(
     port=tty,
@@ -57,6 +54,7 @@ active = True
 exit = False
 halt = False
 quit = False
+skip_homing = False
 home = False
 homing = False
 move = False
@@ -68,7 +66,9 @@ move_stepsize_xy = 2.0
 move_stepsize_z = 2.0
 focus_height_z = 6.0  # 6mm to protect into crashing PCB
 pcb_height_z = 5.0
-probing_height = 4.0  # set above the pcb to safety for now, set to 2.3 at this height the probe needle slightly touches the PCB
+probing_height = 2.3 #4.0  # set above the pcb to safety for now, set to 2.3 at this height the probe needle slightly touches the PCB
+csv_file = "pcb.csv"
+webcamid = 0
 
 # current position
 ender_X = 0.0
@@ -77,6 +77,37 @@ ender_Z = 0.0
 
 # fiducials
 data = {}
+
+def main(argv):
+    global csv_file, webcamid, skip_homing, baud, tty
+    try:
+      opts, args = getopt.getopt(argv,"hi:c:b:",["help", "ifile=", "cam", "skip-homing", "baud-rate"])
+    except getopt.GetoptError:
+      print('probe.py -i <CSV file> -c <webcam ID> -b <baud rate> -u <Marlin serial USB device>')
+      sys.exit(2)
+    for opt, arg in opts:
+        if opt in ("-h", "--help"):
+            print('probe.py -i <CSV file> -c <webcam ID> -b <baud rate> -u <Marlin serial USB device>')
+            sys.exit()
+        elif opt in ("-i", "--ifile"):
+            csv_file = arg.strip()
+        elif opt in ("-c", "--cam"):
+            webcamid = int(arg.replace(" ", ""))
+        elif opt in ("--skip-homing"):
+            skip_homing = True
+        elif opt in ("-b", "--baud-rate"):
+            baud = int(arg.replace(" ", ""))
+        elif opt in ("-u", "--usb-device"):
+            tty = int(arg.replace(" ", ""))
+
+    print('Loading CSV file: ', csv_file)
+    print('Using Webcam ID: ', webcamid)
+    print('Marlin Serial USB Device: ', tty)
+    print('Baudrate: ', baud)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
 
 
 def safetofile():
@@ -124,7 +155,7 @@ ana_seq = [0] * 5
 
 thr_val = [56, 231, 68, 209, 125]
 
-cap = cv2.VideoCapture(int(sys.argv[3]))
+cap = cv2.VideoCapture(webcamid)
 
 ini_con = cap.get(cv2.CAP_PROP_CONTRAST)
 ini_bri = cap.get(cv2.CAP_PROP_BRIGHTNESS)
@@ -177,7 +208,7 @@ def loadCSV(filename):
 
 
 testpads = {}
-loadCSV('pcb.csv')
+loadCSV(csv_file)
 
 
 # pprint.pprint(testpads)
@@ -214,7 +245,8 @@ def transformpoints():
                    float(findkey(testpads, 'partname', 'FID3')[1]['y']), pcb_height_z],
                   [float(findkey(testpads, 'partname', 'FID4')[1]['x']),
                    float(findkey(testpads, 'partname', 'FID4')[1]['y']), pcb_height_z]])
-    # print (P) # debug
+    #print ("P") # debug
+    #pprint.pprint(P) # debug
 
     T = [0.5, 0.6, 0.7]
     R = t3d.euler.euler2mat(0.1, 0.2, 0.3, 'sxyz')
@@ -228,7 +260,9 @@ def transformpoints():
                   [data['fiducial'][1]['x'], data['fiducial'][1]['y'], pcb_height_z],
                   [data['fiducial'][2]['x'], data['fiducial'][2]['y'], pcb_height_z],
                   [data['fiducial'][3]['x'], data['fiducial'][3]['y'], pcb_height_z]])
-    # print (Q) # debug
+
+    #print ("Q") # debug
+    #pprint.pprint(Q) # debug
 
     # calculate matrix from points
     n = P.shape[0]
@@ -243,14 +277,20 @@ def transformpoints():
     trans = lambda x: unpad(np.dot(pad(x), B))
 
     for key, value in testpads.items():
-        if value['partname'] != "FID1" or value['partname'] != "FID2" or value['partname'] != "FID3" or value[
-            'partname'] != "FID4":
-            p = np.array([[value['x'], value['y'], pcb_height_z]])
-            q = trans(p)
-            # print(q) #debug
-            value['trans-x'] = round(q[0][0], 2)
-            value['trans-y'] = round(q[0][1], 2)
-    # print(testpads) # debug
+        #if value['partname'] != "FID1" or value['partname'] != "FID2" or value['partname'] != "FID3" or value[
+           # 'partname'] != "FID4":
+        p = np.array([[value['x'], value['y'], pcb_height_z]])
+
+        #print("p")  # debug
+        #pprint.pprint(p)  # debug
+
+        q = trans(p)
+        # print(q) #debug
+        value['trans-x'] = round(q[0][0], 4)
+        value['trans-y'] = round(q[0][1], 4)
+
+    #print("testpads") # debug
+    #pprint.pprint(testpads) # debug
 
 
 transformpoints()
@@ -280,22 +320,22 @@ def overlay(img):
     cv2.line(img, (cx, cy - r), (cx, cy + r), (0, 255, 0), 1)
     cv2.line(img, (cx - r, cy), (cx + r, cy), (0, 255, 0), 1)
 
-    ovtext(img, "FPS %3.1f" % (frame_fps), (10, 30))
-    ovtext(img, "*%08d" % (prev_frame_cnt), (240, 30))
-    ovtext(img, "X:%3.2f Y:%3.2f Z:%3.2f" % (ender_X, ender_Y, ender_Z), (720, 30))
+    #ovtext(img, "FPS %3.1f" % (frame_fps), (10, 30))
+    #ovtext(img, "*%08d" % (prev_frame_cnt), (240, 30))
+    ovtext(img, "X:%3.2f Y:%3.2f Z:%3.2f" % (ender_X, ender_Y, ender_Z), (500, 30))
     ovtext(img, "Stepsize(XY): %3.2fmm Stepsize(Z): %3.2fmm" % (move_stepsize_xy, move_stepsize_z), (1120, 30))
 
     # fiducials
-    ox1, oy1, ow1, oh1 = 0, 90, 600, 240
+    ox1, oy1, ow1, oh1 = 0, 90, 760, 240
     sub2 = img[oy1:oy1 + oh1, ox1:ox1 + ow1]
     img[oy1:oy1 + oh1, ox1:ox1 + ow1] = sub2 >> 1  # dark background
-    ovtext(img, "Fid 1 (v): %3.2f, %3.2f" % (data['fiducial'][0]['x'], data['fiducial'][0]['y']), (10, 120))
-    ovtext(img, "Fid 2 (b): %3.2f, %3.2f" % (data['fiducial'][1]['x'], data['fiducial'][1]['y']), (10, 160))
-    ovtext(img, "Fid 3 (n): %3.2f, %3.2f" % (data['fiducial'][2]['x'], data['fiducial'][2]['y']), (10, 200))
-    ovtext(img, "Fid 4 (m): %3.2f, %3.2f" % (data['fiducial'][3]['x'], data['fiducial'][3]['y']), (10, 240))
+    ovtext(img, "Fid 1 (v): %3.4f, %3.4f" % (data['fiducial'][0]['x'], data['fiducial'][0]['y']), (10, 120))
+    ovtext(img, "Fid 2 (b): %3.4f, %3.4f" % (data['fiducial'][1]['x'], data['fiducial'][1]['y']), (10, 160))
+    ovtext(img, "Fid 3 (n): %3.4f, %3.4f" % (data['fiducial'][2]['x'], data['fiducial'][2]['y']), (10, 200))
+    ovtext(img, "Fid 4 (m): %3.4f, %3.4f" % (data['fiducial'][3]['x'], data['fiducial'][3]['y']), (10, 240))
     cv2.rectangle(img, (0, fid_hightlight_index * 40 + 125), (8, fid_hightlight_index * 40 + 95), (0, 98, 255), -1)
 
-    ovtext(img, "Pad (%d): %s (%s) X: %3.2f Y:%3.2f" % (
+    ovtext(img, "Pad (%d): %s (%s) X: %3.4f Y:%3.4f" % (
         pad_hightlight_index, testpads[pad_hightlight_index]['partname'], testpads[pad_hightlight_index]['net'],
         testpads[pad_hightlight_index]['trans-x'], testpads[pad_hightlight_index]['trans-y']), (10, 320))
 
@@ -308,10 +348,10 @@ def overlay(img):
     elif quit:
         ovtext(img, "EXITING", (10, 64))
 
-    if enable:
-        ovtext(img, "ENABLED", (480, 30))
-    else:
-        ovtext(img, "ACTIVE", (10, 64))
+    #if enable:
+    #    ovtext(img, "ENABLED", (480, 30))
+    #else:
+    #    ovtext(img, "ACTIVE", (10, 64))
 
 
 def overana(img):
@@ -495,7 +535,7 @@ def gcode(ser, cmd):
 
 
 def ender():
-    global ser, exit, home, homing, move, moving, move_abs, moveZ, moveZ_abs, ender_X, ender_Y, ender_Z
+    global ser, exit, home, homing, move, moving, move_abs, moveZ, moveZ_abs, ender_X, ender_Y, ender_Z, skip_homing
     init = True
     ender_ready = False
 
@@ -507,16 +547,17 @@ def ender():
                 ender_ready = True
                 print("SER:", res)
 
-            if (ender_ready):
-                print('Ender: homing.')
-                gcode(ser, b'G28')
-                homing = True
+            if ender_ready:
+                if not skip_homing:
+                    print('Ender: homing.')
+                    gcode(ser, b'G28')
+                    homing = True
 
-                print('Ender: Move to Start Position.')
-                gcode(ser, b'G0 F400')  # set the feedrate (mm/m)
-                gcode(ser, b'G0 X0 Y0 Z' + str(focus_height_z).encode())  # move to safe z height
-                gcode(ser, b'M114')  # report current position
-                moving = True
+                    print('Ender: Move to Start Position.')
+                    gcode(ser, b'G0 F400')  # set the feedrate (mm/m)
+                    gcode(ser, b'G0 X0 Y0 Z' + str(focus_height_z).encode())  # move to safe z height
+                    gcode(ser, b'M114')  # report current position
+                    moving = True
 
         elif ser.in_waiting > 0:
             res = ser.readline()
