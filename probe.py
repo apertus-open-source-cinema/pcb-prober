@@ -66,7 +66,7 @@ move_stepsize_xy = 2.0
 move_stepsize_z = 2.0
 focus_height_z = 6.0  # 6mm to protect into crashing PCB
 pcb_height_z = 5.0
-probing_height = 2.3 #4.0  # set above the pcb to safety for now, set to 2.3 at this height the probe needle slightly touches the PCB
+probing_height = 2.1 #4.0  # set above the pcb to safety for now, set to 2.3 at this height the probe needle slightly touches the PCB
 csv_file = "pcb.csv"
 webcamid = 0
 
@@ -153,7 +153,7 @@ ana_pas = [0] * 4
 ana_idx = -1
 ana_seq = [0] * 5
 
-thr_val = [56, 231, 68, 209, 125]
+thr_val = [56, 231, 32, 228, 115]
 
 cap = cv2.VideoCapture(webcamid)
 
@@ -314,6 +314,7 @@ def overlay(img):
     rx0, ry0, rx1, ry1 = ana_roi
     cx, cy, r = int((rx0 + rx1) / 2), int((ry0 + ry1) / 2), 64
 
+    # crosshair and center window
     cv2.rectangle(img, (rx0, ry0), (rx1, ry1), (0, 0, 255), 1)
     cv2.line(img, (cx, cy - r), (cx, cy + r), (0, 0, 0), 3)
     cv2.line(img, (cx - r, cy), (cx + r, cy), (0, 0, 0), 3)
@@ -343,10 +344,10 @@ def overlay(img):
         ovtext(img, "HOMING", (10, 64))
     elif moving:
         ovtext(img, "MOVING", (10, 64))
-    elif halt:
-        ovtext(img, "HALTING", (10, 64))
-    elif quit:
-        ovtext(img, "EXITING", (10, 64))
+    #elif halt:
+    #    ovtext(img, "HALTING", (10, 64))
+    #elif quit:
+    #    ovtext(img, "EXITING", (10, 64))
 
     #if enable:
     #    ovtext(img, "ENABLED", (480, 30))
@@ -389,11 +390,11 @@ def overana(img):
 
 def choice(img):
     pass
-    # rx0, ry0, rx1, ry1 = caproi()
+    #rx0, ry0, rx1, ry1 = caproi()
 
-    #    yp = ry0 + int((idx + 0.5)*row_size)
-    #    cv2.circle(img, (selvis, yp), 10, col[idx], -1)
-    #    cv2.circle(img, (selvis, yp), 15, col[4], 5)
+    #yp = ry0 + int((idx + 0.5)*row_size)
+    #cv2.circle(img, (selvis, yp), 10, col[idx], -1)
+    #cv2.circle(img, (selvis, yp), 15, col[4], 5)
 
 
 def capture():
@@ -513,14 +514,17 @@ def analyze():
             # print(pos[idx])
 
             if kp.size < thr_val[4]:
-                ovtext(img, "%3d" % kp.size, (x - 30, y - 8), (0, 0, 0))
+                ovtext(img, "%3d" % kp.size, (x - 30, y - 15), (0, 0, 0))
             else:
-                if 300 < pos[idx][0] < 420 and 300 < pos[idx][1] < 420:
-                    ovtext(img, "%3d" % kp.size, (x - 30, y - 8), (0, 0, 255))
-                    # interesting = True
+                if 250 < pos[idx][0] < 470 and 250 < pos[idx][1] < 470:
+                    ovtext(img, "%3d" % kp.size, (x - 30, y - 15), (0, 0, 255))
+                    #crosshair
+                    radius = 20
+                    cv2.line(img, (x-radius, y), (x+radius, y), (0, 0, 255), 7)
+                    cv2.line(img, (x, y-radius), (x, y+radius), (0, 0, 255), 7)
                     ana_pos = pos[idx]
                 else:
-                    ovtext(img, "%3d" % kp.size, (x - 30, y - 8), (255, 255, 255))
+                    ovtext(img, "%3d" % kp.size, (x - 30, y - 15), (255, 255, 255))
 
         analysis = img
         analysis_cnt += 1
@@ -736,7 +740,7 @@ try:
             prev_analysis_cnt = analysis_cnt
 
             overana(img)
-            # choice(img)
+            #choice(img)
 
             scale_percent = 70  # percent of original size
             width = int(img.shape[1] * scale_percent / 100)
