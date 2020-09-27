@@ -31,24 +31,10 @@ from random import randint
 import transforms3d as t3d
 from threading import Thread, Condition, Lock
 
-
-tty = '/dev/ttyUSB0' #sys.argv[1]
-baud = 1000000 #int(sys.argv[2])
-
-ser = serial.Serial(
-    port=tty,
-    baudrate=baud,
-    bytesize=serial.EIGHTBITS,
-    parity=serial.PARITY_NONE,
-    stopbits=serial.STOPBITS_ONE,
-    interCharTimeout=0.5,
-    timeout=5.0,
-    xonxoff=False,
-    rtscts=False,
-    dsrdtr=False);
-
 # fifo = posix.open(sys.argv[1], posix.O_WRONLY | posix.O_NONBLOCK)
 
+tty = '/dev/ttyUSB0'  # sys.argv[1]
+baud = 1000000  # int(sys.argv[2])
 enable = True
 active = True
 exit = False
@@ -66,10 +52,11 @@ move_stepsize_xy = 2.0
 move_stepsize_z = 2.0
 focus_height_z = 6.0  # 6mm to protect into crashing PCB
 pcb_height_z = 5.0
-probing_height = 2.1 #4.0  # set above the pcb to safety for now, set to 2.3 at this height the probe needle slightly touches the PCB
+probing_height = 2.1  # 4.0  # set above the pcb to safety for now, set to 2.3 at this height the probe needle slightly touches the PCB
 csv_file = "pcb.csv"
 webcamid = 0
-analyze_filter_id = 0
+analyze_filter_id = 6
+save_image = False
 
 # current position
 ender_X = 0.0
@@ -79,13 +66,15 @@ ender_Z = 0.0
 # fiducials
 data = {}
 
+
 def main(argv):
     global csv_file, webcamid, skip_homing, baud, tty
     try:
-      opts, args = getopt.getopt(argv,"hi:c:b:",["help", "ifile=", "cam", "skip-homing", "baud-rate"])
+        opts, args = getopt.getopt(argv, "hi:c:b:u:",
+                                   ["help", "ifile=", "cam", "skip-homing", "baud-rate", "usb-device"])
     except getopt.GetoptError:
-      print('probe.py -i <CSV file> -c <webcam ID> -b <baud rate> -u <Marlin serial USB device>')
-      sys.exit(2)
+        print('probe.py -i <CSV file> -c <webcam ID> -b <baud rate> -u <Marlin serial USB device>')
+        sys.exit(2)
     for opt, arg in opts:
         if opt in ("-h", "--help"):
             print('probe.py -i <CSV file> -c <webcam ID> -b <baud rate> -u <Marlin serial USB device>')
@@ -99,7 +88,7 @@ def main(argv):
         elif opt in ("-b", "--baud-rate"):
             baud = int(arg.replace(" ", ""))
         elif opt in ("-u", "--usb-device"):
-            tty = int(arg.replace(" ", ""))
+            tty = arg
 
     print('Loading CSV file: ', csv_file)
     print('Using Webcam ID: ', webcamid)
@@ -109,6 +98,18 @@ def main(argv):
 
 if __name__ == "__main__":
     main(sys.argv[1:])
+
+ser = serial.Serial(
+    port=tty,
+    baudrate=baud,
+    bytesize=serial.EIGHTBITS,
+    parity=serial.PARITY_NONE,
+    stopbits=serial.STOPBITS_ONE,
+    interCharTimeout=0.5,
+    timeout=5.0,
+    xonxoff=False,
+    rtscts=False,
+    dsrdtr=False);
 
 
 def safetofile():
@@ -125,7 +126,8 @@ pad_hightlight_index = 0;
 camera_to_probe_offset_x = -27.56
 camera_to_probe_offset_y = -0.73
 
-camera_pixels_per_mm = 270  # measured at slightly above work height of 6mm
+camera_pixels_per_mm = 155  # measured at slightly above work height of 6mm
+# camera_pixels_per_mm = 270  # measured at slightly above work height of 6mm
 
 frame = None
 frame_cnt = 0
@@ -154,7 +156,9 @@ ana_pas = [0] * 4
 ana_idx = -1
 ana_seq = [0] * 5
 
-thr_val = [56, 231, 32, 228, 115]
+# thr_val = [70, 231, 150, 205, 115] # pcb fiducials
+thr_val = [-26, 231, 232, 105, 221]  # testpattern points red
+thr_val2 = [-26, 231, 212, 131, 221]  # testpattern points blue
 
 cap = cv2.VideoCapture(webcamid)
 
@@ -246,8 +250,8 @@ def transformpoints():
                    float(findkey(testpads, 'partname', 'FID3')[1]['y']), pcb_height_z],
                   [float(findkey(testpads, 'partname', 'FID4')[1]['x']),
                    float(findkey(testpads, 'partname', 'FID4')[1]['y']), pcb_height_z]])
-    #print ("P") # debug
-    #pprint.pprint(P) # debug
+    # print ("P") # debug
+    # pprint.pprint(P) # debug
 
     T = [0.5, 0.6, 0.7]
     R = t3d.euler.euler2mat(0.1, 0.2, 0.3, 'sxyz')
@@ -262,8 +266,8 @@ def transformpoints():
                   [data['fiducial'][2]['x'], data['fiducial'][2]['y'], pcb_height_z],
                   [data['fiducial'][3]['x'], data['fiducial'][3]['y'], pcb_height_z]])
 
-    #print ("Q") # debug
-    #pprint.pprint(Q) # debug
+    # print ("Q") # debug
+    # pprint.pprint(Q) # debug
 
     # calculate matrix from points
     n = P.shape[0]
@@ -278,23 +282,24 @@ def transformpoints():
     trans = lambda x: unpad(np.dot(pad(x), B))
 
     for key, value in testpads.items():
-        #if value['partname'] != "FID1" or value['partname'] != "FID2" or value['partname'] != "FID3" or value[
-           # 'partname'] != "FID4":
+        # if value['partname'] != "FID1" or value['partname'] != "FID2" or value['partname'] != "FID3" or value[
+        # 'partname'] != "FID4":
         p = np.array([[value['x'], value['y'], pcb_height_z]])
 
-        #print("p")  # debug
-        #pprint.pprint(p)  # debug
+        # print("p")  # debug
+        # pprint.pprint(p)  # debug
 
         q = trans(p)
         # print(q) #debug
         value['trans-x'] = round(q[0][0], 4)
         value['trans-y'] = round(q[0][1], 4)
 
-    #print("testpads") # debug
-    #pprint.pprint(testpads) # debug
+    # print("testpads") # debug
+    # pprint.pprint(testpads) # debug
 
 
 transformpoints()
+
 
 def ovtext(img, txt="test", pos=(0, 0), col=(255, 255, 255)):
     font = cv2.FONT_HERSHEY_SIMPLEX
@@ -322,8 +327,8 @@ def overlay(img):
     cv2.line(img, (cx, cy - r), (cx, cy + r), (0, 255, 0), 1)
     cv2.line(img, (cx - r, cy), (cx + r, cy), (0, 255, 0), 1)
 
-    #ovtext(img, "FPS %3.1f" % (frame_fps), (10, 30))
-    #ovtext(img, "*%08d" % (prev_frame_cnt), (240, 30))
+    # ovtext(img, "FPS %3.1f" % (frame_fps), (10, 30))
+    # ovtext(img, "*%08d" % (prev_frame_cnt), (240, 30))
     ovtext(img, "X:%3.2f Y:%3.2f Z:%3.2f" % (ender_X, ender_Y, ender_Z), (500, 30))
     ovtext(img, "Stepsize(XY): %3.2fmm Stepsize(Z): %3.2fmm" % (move_stepsize_xy, move_stepsize_z), (1120, 30))
 
@@ -345,14 +350,14 @@ def overlay(img):
         ovtext(img, "HOMING", (10, 64))
     elif moving:
         ovtext(img, "MOVING", (10, 64))
-    #elif halt:
+    # elif halt:
     #    ovtext(img, "HALTING", (10, 64))
-    #elif quit:
+    # elif quit:
     #    ovtext(img, "EXITING", (10, 64))
 
-    #if enable:
+    # if enable:
     #    ovtext(img, "ENABLED", (480, 30))
-    #else:
+    # else:
     #    ovtext(img, "ACTIVE", (10, 64))
 
 
@@ -403,11 +408,11 @@ def overana(img):
 
 def choice(img):
     pass
-    #rx0, ry0, rx1, ry1 = caproi()
+    # rx0, ry0, rx1, ry1 = caproi()
 
-    #yp = ry0 + int((idx + 0.5)*row_size)
-    #cv2.circle(img, (selvis, yp), 10, col[idx], -1)
-    #cv2.circle(img, (selvis, yp), 15, col[4], 5)
+    # yp = ry0 + int((idx + 0.5)*row_size)
+    # cv2.circle(img, (selvis, yp), 10, col[idx], -1)
+    # cv2.circle(img, (selvis, yp), 15, col[4], 5)
 
 
 def capture():
@@ -463,15 +468,15 @@ def analyze():
     par.maxThreshold = 260
 
     par.filterByArea = True
-    par.minArea = 8000
-    par.maxArea = 20000
+    par.minArea = 1000
+    par.maxArea = 30000
 
     par.filterByColor = False
 
     par.filterByCircularity = False
     par.minCircularity = 0.2
 
-    par.filterByConvexity = True
+    par.filterByConvexity = False
     par.minConvexity = 0.8
 
     par.filterByInertia = False
@@ -494,21 +499,38 @@ def analyze():
         # msk_high = cv2.inRange(hsv, hsv_high[0], hsv_high[1])
         # msk = cv2.bitwise_not(cv2.bitwise_or(msk_grid, msk_high))
         # res = cv2.bitwise_and(roi, roi, mask=msk)
-        #h, s, v = hsv[:, :, 0], hsv[:, :, 1], hsv[:, :, 2]
+        # h, s, v = hsv[:, :, 0], hsv[:, :, 1], hsv[:, :, 2]
 
         h, s, v = cv2.split(hsv)
 
-        ret, ht = cv2.threshold(h, thr_val[0], 255, cv2.THRESH_BINARY_INV)
-        ret, ht = cv2.threshold(ht, thr_val[1], 255, cv2.THRESH_BINARY)
+        ret, ht = cv2.threshold(h, thr_val[0], 255, cv2.THRESH_BINARY)
+        # ret, ht = cv2.threshold(ht, thr_val[1], 0, cv2.THRESH_BINARY_INV)
         ret, st = cv2.threshold(s, thr_val[2], 255, cv2.THRESH_BINARY_INV)
-        ret, vt = cv2.threshold(v, thr_val[3], 255, cv2.THRESH_BINARY)
+        ret, vt = cv2.threshold(v, thr_val[3], 255, cv2.THRESH_BINARY_INV)
+
+        # thr = cv2.merge((ht, st, vt))
         thr = cv2.merge((ht, st, vt))
+        # hsv1 = cv2.cvtColor(thr, cv2.COLOR_BGR2HSV)
+        # h1, s1, v1 = cv2.split(hsv1)
+        # thr = cv2.threshold(v1, 200, 255, cv2.THRESH_BINARY)
+        # thr = cv2.cvtColor(v1, cv2.COLOR_GRAY2BGR)
+        # cv2.bitwise_and(thr, thr, ht, mask = ht)
+        # cv2.bitwise_and(thr, thr, st, mask = st)
+
+        thr = cv2.bitwise_and(thr, cv2.cvtColor(vt, cv2.COLOR_GRAY2BGR))
+        thr = cv2.bitwise_and(thr, cv2.cvtColor(st, cv2.COLOR_GRAY2BGR))
+        thr = cv2.bitwise_and(thr, cv2.cvtColor(ht, cv2.COLOR_GRAY2BGR))
+
+        # cv2.bitwise_and(, thr, mask = st)
+        # cv2.bitwise_and(thr, thr, mask = ht)
+
         # ret, thr = cv2.threshold(s, 80, 250, cv2.THRESH_TOZERO)
         # gry = cv2.cvtColor(thr, cv2.COLOR_BGR2GRAY)
+
         mor = cv2.morphologyEx(thr, cv2.MORPH_OPEN, kern_open)
         img = cv2.morphologyEx(mor, cv2.MORPH_CLOSE, kern_close)
         # img = cv2.cvtColor(mor, cv2.COLOR_GRAY2RGB)
-        #img = thr
+        # img = thr
 
         kpt = detector.detect(img)
         img = cv2.drawKeypoints(img, kpt, np.array([]), \
@@ -542,16 +564,17 @@ def analyze():
             pos[idx] = (x, y)
 
             # print(pos[idx])
-
+            radius = 20
             if kp.size < thr_val[4]:
-                ovtext(img, "%3d" % kp.size, (x - 30, y - 15), (0, 0, 0))
+                ovtext(img, "%3d" % kp.size, (x - 30, y - 15), (255, 0, 0))
+                cv2.line(img, (x - radius, y), (x + radius, y), (255, 0, 0), 2)
+                cv2.line(img, (x, y - radius), (x, y + radius), (255, 0, 0), 2)
             else:
-                if 250 < pos[idx][0] < 470 and 250 < pos[idx][1] < 470:
+                if 150 < pos[idx][0] < 570 and 150 < pos[idx][1] < 570:
                     ovtext(img, "%3d" % kp.size, (x - 30, y - 15), (0, 0, 255))
-                    #crosshair
-                    radius = 20
-                    cv2.line(img, (x-radius, y), (x+radius, y), (0, 0, 255), 7)
-                    cv2.line(img, (x, y-radius), (x, y+radius), (0, 0, 255), 7)
+                    # crosshair
+                    cv2.line(img, (x - radius, y), (x + radius, y), (0, 0, 255), 7)
+                    cv2.line(img, (x, y - radius), (x, y + radius), (0, 0, 255), 7)
                     ana_pos = pos[idx]
                 else:
                     ovtext(img, "%3d" % kp.size, (x - 30, y - 15), (255, 255, 255))
@@ -766,22 +789,29 @@ try:
             cv2.imshow('Capture', resized)
 
         if prev_analysis_cnt != analysis_cnt:
-            img = analysis
+            img_ana = analysis
             prev_analysis_cnt = analysis_cnt
 
-            overana(img)
-            #choice(img)
+            overana(img_ana)
+            # choice(img)
 
             scale_percent = 70  # percent of original size
-            width = int(img.shape[1] * scale_percent / 100)
-            height = int(img.shape[0] * scale_percent / 100)
+            width = int(img_ana.shape[1] * scale_percent / 100)
+            height = int(img_ana.shape[0] * scale_percent / 100)
             dim = (width, height)
 
-            resized = cv2.resize(img, dim, interpolation=cv2.INTER_AREA)
+            resized = cv2.resize(img_ana, dim, interpolation=cv2.INTER_AREA)
 
             cv2.imshow('Analyze', resized)
 
             # print(ana_obj, ana_pos, ana_pas)
+
+        if save_image:
+            cv2.imwrite(save_image + "-cam.png", img)
+            print('Writing Image: ', save_image + "-cam.png")
+            cv2.imwrite(save_image + "-analysis.png", img_ana)
+            print('Writing Image: ', save_image + "-analysis.png")
+            save_image = False
 
         key = cv2.waitKey(1) & 0xFF
 
@@ -796,9 +826,9 @@ try:
         # elif key == ord('h'):   # halt
         # halt = True
 
-        elif key == ord('q'): #cycle through image analysing filters
+        elif key == ord('q'):  # cycle through image analysing filters
             analyze_filter_id += 1
-            if(analyze_filter_id > 6):
+            if (analyze_filter_id > 6):
                 analyze_filter_id = 0
 
         elif key == ord('h'):  # home
@@ -835,9 +865,13 @@ try:
             thr_val[3] -= 1
         elif key == ord('8'):  # thr[3]++
             thr_val[3] += 1
+        elif key == ord('9'):  # thr[4]--
+            thr_val[4] -= 1
+        elif key == ord('0'):  # thr[4]++
+            thr_val[4] += 1
 
         # step sizes
-        elif key == ord('9'):
+        elif key == ord('u'):
             if move_stepsize_xy >= 6:
                 move_stepsize_xy -= 1
             elif move_stepsize_xy <= 5.9 and move_stepsize_xy > 0.1:
@@ -848,7 +882,7 @@ try:
             if move_stepsize_xy < 0.01:
                 move_stepsize_xy = 0.01
 
-        elif key == ord('0'):
+        elif key == ord('i'):
             if move_stepsize_xy >= 5:
                 move_stepsize_xy += 1
             elif move_stepsize_xy <= 5 and move_stepsize_xy > 0.09:
@@ -925,6 +959,16 @@ try:
 
         elif key == ord('f'):  # F - move to safe z height
             moveZ_abs = "Z" + str(focus_height_z)
+
+        elif key == ord('x'):  # F - move to safe z height
+            f = open("testresults.csv", "a")
+            # f.write("PARTNAME;TRANSFORMED-X;TRANSFORMED-Y;CENTER-PIXEL-OFFSET-X;CENTER-PIXEL-OFFSET-Y" # HEADER
+            f.write(testpads[pad_hightlight_index]['partname'] + ";" + str(
+                testpads[pad_hightlight_index]['trans-x']) + ";" +
+                    str(testpads[pad_hightlight_index]['trans-y']) + ";" + str(ana_pos[0] - 360)
+                    + ";" + str(ana_pos[1] - 360) + "\r\n")
+            f.close()
+            save_image = testpads[pad_hightlight_index]['partname']
 
         elif key == 255:  # nokey
             pass

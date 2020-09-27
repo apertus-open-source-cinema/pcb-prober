@@ -50,9 +50,9 @@ Page Up = move Stepsize(Z) higher
 
 Page Down = move Stepsize(Z) lower - limit: 6mm - to prevent crashing needle into board
 
-9 = decrease Stepsize(XY) - limit: 0.01mm
+u = decrease Stepsize(XY) - limit: 0.01mm
 
-0 = increase Stepsize(XY)
+i = increase Stepsize(XY)
 
 o = decrease Stepsize(Z) - limit: 0.1mm
 
@@ -98,6 +98,10 @@ f = raise probe to safe height
 
 8 = increase value range filter
 
+9 = decrease size filter
+
+0 = increase filter filter
+
 q = cycle through filter channel display
 
 ESCAPE = quit
@@ -124,4 +128,14 @@ The 5 filter parameters editable with number keys 1 to 8 do:
 [2] saturation (S) cut off (displayed in green color)
 [3] value (V) cut off (displayed in blue color)
 [4] size limiter - not editable currently
+```
+
+# Measurement Interface
+On the Pi Zero:
+```
+minicom -c on -b 1000000 -D /dev/ttyS0 -w S0
+```
+sending letter 'A' over ttyS0 should trigger a measurement, results are returned in the format:
+```
+A       1C2 2BA 1EC 1E7 0F9 067
 ```
