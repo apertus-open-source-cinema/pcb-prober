@@ -15,6 +15,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+# Notes:
+# The AXIOM Beta Power Board requires 0,0 to 120,116 of ender space to operate properly (with probe and camera)
+
 import sys
 import cv2
 import numpy as np
@@ -48,9 +51,10 @@ moveZ = False
 moving = False
 move_abs = False
 moveZ_abs = False
+measuring_run = False
 move_stepsize_xy = 2.0
 move_stepsize_z = 2.0
-focus_height_z = 6.0  # 6mm to protect into crashing PCB
+focus_height_z = 1.0  # 6mm to protect into crashing PCB
 pcb_height_z = 5.0
 probing_height = 2.1  # 4.0  # set above the pcb to safety for now, set to 2.3 at this height the probe needle slightly touches the PCB
 csv_file = "pcb.csv"
@@ -127,6 +131,7 @@ camera_to_probe_offset_x = -27.56
 camera_to_probe_offset_y = -0.73
 
 camera_pixels_per_mm = 155  # measured at slightly above work height of 6mm
+camera_pixels_per_mm = 230  # measured at slightly above work height of 1mm
 # camera_pixels_per_mm = 270  # measured at slightly above work height of 6mm
 
 frame = None
@@ -144,6 +149,9 @@ analysis_cnt = 0
 analysis_time = time()
 analysis_delta = 1
 
+settle_time = time()
+dwell_time = 0.5
+
 ana_size = (720, 720)
 ana_roi = (int((1920 - ana_size[0]) / 2),
            int((1080 - ana_size[1]) / 2),
@@ -157,8 +165,8 @@ ana_idx = -1
 ana_seq = [0] * 5
 
 # thr_val = [70, 231, 150, 205, 115] # pcb fiducials
-thr_val = [-26, 231, 232, 105, 221]  # testpattern points red
-thr_val2 = [-26, 231, 212, 131, 221]  # testpattern points blue
+thr_val = [-1, 231, 130, 100, 170]  # testpattern points
+# thr_val2 = [-26, 231, 212, 131, 221]  # testpattern points blue
 
 cap = cv2.VideoCapture(webcamid)
 
@@ -342,8 +350,9 @@ def overlay(img):
     ovtext(img, "Fid 4 (m): %3.4f, %3.4f" % (data['fiducial'][3]['x'], data['fiducial'][3]['y']), (10, 240))
     cv2.rectangle(img, (0, fid_hightlight_index * 40 + 125), (8, fid_hightlight_index * 40 + 95), (0, 98, 255), -1)
 
-    ovtext(img, "Pad (%d): %s (%s) X: %3.4f Y:%3.4f" % (
-        pad_hightlight_index, testpads[pad_hightlight_index]['partname'], testpads[pad_hightlight_index]['net'],
+    ovtext(img, "Pad (%d/%d): %s (%s) X: %3.4f Y:%3.4f" % (
+        pad_hightlight_index, len(testpads)-1, testpads[pad_hightlight_index]['partname'],
+        testpads[pad_hightlight_index]['net'],
         testpads[pad_hightlight_index]['trans-x'], testpads[pad_hightlight_index]['trans-y']), (10, 320))
 
     if homing:
@@ -465,11 +474,11 @@ def analyze():
 
     par = cv2.SimpleBlobDetector_Params()
     par.minThreshold = 50
-    par.maxThreshold = 260
+    par.maxThreshold = 400
 
     par.filterByArea = True
     par.minArea = 1000
-    par.maxArea = 30000
+    par.maxArea = 70000
 
     par.filterByColor = False
 
@@ -592,7 +601,7 @@ def gcode(ser, cmd):
 
 
 def ender():
-    global ser, exit, home, homing, move, moving, move_abs, moveZ, moveZ_abs, ender_X, ender_Y, ender_Z, skip_homing
+    global ser, exit, home, homing, move, moving, move_abs, moveZ, moveZ_abs, ender_X, ender_Y, ender_Z, skip_homing, settle_time
     init = True
     ender_ready = False
 
@@ -629,6 +638,7 @@ def ender():
                 ender_X = float(A[0][1])
                 ender_Y = float(A[1][1])
                 ender_Z = float(A[2][1])
+                settle_time = time()
 
             print("N:", res)
 
@@ -671,7 +681,8 @@ def ender():
                 print(b'G0 ' + moveparts.encode())  # debug
 
                 gcode(ser, b'G0 X-0.5 Y-0.5')  # backlash compensation: always approach each point from same side
-                print(b'G0 X-0.5 Y-0.5')  # debug
+                # gcode(ser, b'G0 X+0.5 Y+0.5')  # backlash compensation: always approach each point from same side
+                # print(b'G0 X-0.5 Y-0.5')  # debug
 
                 gcode(ser, b'M114')
                 move = False
@@ -692,7 +703,8 @@ def ender():
                 parts = [_.split(' ') for _ in move_abs.rstrip().split(' ')]
                 x = float(parts[0][0][1:])
                 y = float(parts[1][0][1:])
-                movepart1 = 'X' + str(x + 0.5) + ' Y' + str(y + 0.5)  # backlash compensation
+                # movepart1 = 'X' + str(x + 0.5) + ' Y' + str(y + 0.5)  # backlash compensation
+                movepart1 = 'X' + str(x - 0.5) + ' Y' + str(y - 0.5)  # backlash compensation
                 movepart2 = 'X' + str(x) + ' Y' + str(y)
 
                 # print(b'G0 ' + movepart1.encode())  # backlash compensation: always approach each point from same side
@@ -806,11 +818,32 @@ try:
 
             # print(ana_obj, ana_pos, ana_pas)
 
+        if measuring_run:
+            if not moving:
+                if (time() > (settle_time + dwell_time)):
+                    settle_time = time()
+
+                    f = open("testresults.csv", "a")
+                    # f.write("PARTNAME;TRANSFORMED-X;TRANSFORMED-Y;CENTER-PIXEL-OFFSET-X;CENTER-PIXEL-OFFSET-Y" # HEADER
+                    f.write(testpads[pad_hightlight_index]['partname'] + ";" + str(
+                        testpads[pad_hightlight_index]['trans-x']) + ";" +
+                            str(testpads[pad_hightlight_index]['trans-y']) + ";" + str(ana_pos[0] - 360)
+                            + ";" + str(ana_pos[1] - 360) + "\r\n")
+                    f.close()
+                    save_image = testpads[pad_hightlight_index]['partname']
+
+                    pad_hightlight_index += 1
+                    if pad_hightlight_index >= len(testpads) + 1:
+                        measuring_run = False
+                    else:
+                        move_abs = "X" + str(round(testpads[pad_hightlight_index]['trans-x'], 2)) + " Y" + str(
+                            round(testpads[pad_hightlight_index]['trans-y'], 2))
+
         if save_image:
-            cv2.imwrite(save_image + "-cam.png", img)
-            print('Writing Image: ', save_image + "-cam.png")
-            cv2.imwrite(save_image + "-analysis.png", img_ana)
-            print('Writing Image: ', save_image + "-analysis.png")
+            cv2.imwrite(save_image + "-cam.jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 80])
+            print('Writing Image: ', save_image + "-cam.jpg", [cv2.IMWRITE_JPEG_QUALITY, 80])
+            cv2.imwrite(save_image + "-analysis.jpg", img_ana, [cv2.IMWRITE_JPEG_QUALITY, 80])
+            print('Writing Image: ', save_image + "-analysis.jpg", [cv2.IMWRITE_JPEG_QUALITY, 80])
             save_image = False
 
         key = cv2.waitKey(1) & 0xFF
@@ -940,7 +973,7 @@ try:
 
         elif key == ord('a'):  # A - cycle through testpads
             pad_hightlight_index += 1
-            if pad_hightlight_index >= len(testpads) - 1:
+            if pad_hightlight_index >= len(testpads):
                 pad_hightlight_index = 0
 
         elif key == ord('s'):  # S - move camera to selected testpad
@@ -960,15 +993,8 @@ try:
         elif key == ord('f'):  # F - move to safe z height
             moveZ_abs = "Z" + str(focus_height_z)
 
-        elif key == ord('x'):  # F - move to safe z height
-            f = open("testresults.csv", "a")
-            # f.write("PARTNAME;TRANSFORMED-X;TRANSFORMED-Y;CENTER-PIXEL-OFFSET-X;CENTER-PIXEL-OFFSET-Y" # HEADER
-            f.write(testpads[pad_hightlight_index]['partname'] + ";" + str(
-                testpads[pad_hightlight_index]['trans-x']) + ";" +
-                    str(testpads[pad_hightlight_index]['trans-y']) + ";" + str(ana_pos[0] - 360)
-                    + ";" + str(ana_pos[1] - 360) + "\r\n")
-            f.close()
-            save_image = testpads[pad_hightlight_index]['partname']
+        elif key == ord('x'):  # measure
+            measuring_run = not measuring_run
 
         elif key == 255:  # nokey
             pass
