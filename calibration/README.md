@@ -113,12 +113,3 @@ The 5 filter parameters editable with number keys 1 to 8 do:
 [4] size limiter - not editable currently
 ```
 
-# Measurement Interface
-On the Pi Zero:
-```
-minicom -c on -b 1000000 -D /dev/ttyS0 -w S0
-```
-sending letter 'A' over ttyS0 should trigger a measurement, results are returned in the format:
-```
-A       1C2 2BA 1EC 1E7 0F9 067
-```
