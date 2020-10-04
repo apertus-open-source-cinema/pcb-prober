@@ -9,6 +9,15 @@ The measure the mechanical shortcomings of the Ender 2 3D printer hardware we ma
 
 ./prober-calibration.py -u /dev/ttyUSB0 -b 1000000 -c 0 -i paper.csv
 ```
+
+# Files
+
+*generate_csv.py* - generates CSV for prober-calibration.py with circle grid of arbitrary number of coloumns/rows and defined spacing, currently generates 4 runs of the same grid
+
+*paper.csv* - template circle grid CSV
+
+
+# Notes
 Note that backlash compensation is active and results in each point 
 being approached from the same side. This means that even small distance movements result 
 in the machine moving at least 0.5mm on each axis.
@@ -112,4 +121,3 @@ The 5 filter parameters editable with number keys 1 to 8 do:
 [3] value (V) cut off (displayed in blue color)
 [4] size limiter - not editable currently
 ```
-
