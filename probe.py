@@ -15,9 +15,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-# Notes:
-# The AXIOM Beta Power Board requires 0,0 to 120,116 of ender space to operate properly (with probe and camera)
-
 import sys
 import cv2
 import numpy as np
@@ -975,6 +972,9 @@ try:
             pad_hightlight_index += 1
             if pad_hightlight_index >= len(testpads):
                 pad_hightlight_index = 0
+
+        elif key == ord('c'):  # C - reset testpad index
+            pad_hightlight_index = 0
 
         elif key == ord('s'):  # S - move camera to selected testpad
             move_abs = "X" + str(round(testpads[pad_hightlight_index]['trans-x'], 2)) + " Y" + str(

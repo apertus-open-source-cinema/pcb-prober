@@ -15,10 +15,13 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+# Notes:
+# The AXIOM Beta Power Board requires 0,0 to 120,116 of ender space to operate properly (with probe and camera)
+
 grid_distance_x = 2
 grid_distance_y = 2
-grid_count_x = 3
-grid_count_y = 2
+grid_count_x = 58
+grid_count_y = 66
 
 f = open("output.csv", "w")
 index = 4

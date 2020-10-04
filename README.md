@@ -76,6 +76,10 @@ m = set current camera location as fiducial 4 location
 
 a = cycle selection through the testpads
 
+c = reset to first testpad (index = 0)
+
+x = start/pause the automatic probing process
+
 s = move camera to selected testpads
 
 d = probe here (camera crosshair)
