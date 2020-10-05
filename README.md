@@ -5,7 +5,7 @@ technology (3D printer mechanics/controller, raspberry pi, openCV, etc.)
 
 
 # Software Requirements
-Python3, NumPy, keyboard, opencv-python, serial
+Python3, NumPy, keyboard, opencv-python, serial, wget, paramiko
 
 ```
 pip install numpy, keyboard, serial

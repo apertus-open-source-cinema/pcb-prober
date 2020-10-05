@@ -30,6 +30,9 @@ from time import sleep, time
 from random import randint
 import transforms3d as t3d
 from threading import Thread, Condition, Lock
+import wget
+import os
+from paramiko import SSHClient, AutoAddPolicy
 
 # fifo = posix.open(sys.argv[1], posix.O_WRONLY | posix.O_NONBLOCK)
 
@@ -49,15 +52,16 @@ moving = False
 move_abs = False
 moveZ_abs = False
 measuring_run = False
+save_image = False
 move_stepsize_xy = 2.0
 move_stepsize_z = 2.0
-focus_height_z = 1.0  # 6mm to protect into crashing PCB
+focus_height_z = 6.0  # 6mm to protect into crashing PCB
 pcb_height_z = 5.0
-probing_height = 2.1  # 4.0  # set above the pcb to safety for now, set to 2.3 at this height the probe needle slightly touches the PCB
+probing_height = 3  # 2.1  # 4.0  # set above the pcb to safety for now, set to 2.3 at this height the probe needle slightly touches the PCB
 csv_file = "pcb.csv"
 webcamid = 0
 analyze_filter_id = 6
-save_image = False
+pi_zero_ip = "192.168.10.101"
 
 # current position
 ender_X = 0.0
@@ -69,12 +73,12 @@ data = {}
 
 
 def main(argv):
-    global csv_file, webcamid, skip_homing, baud, tty
+    global csv_file, webcamid, skip_homing, baud, tty, pi_zero_ip
     try:
-        opts, args = getopt.getopt(argv, "hi:c:b:u:",
-                                   ["help", "ifile=", "cam", "skip-homing", "baud-rate", "usb-device"])
+        opts, args = getopt.getopt(argv, "hi:c:b:u:p:",
+                                   ["help", "ifile=", "cam", "skip-homing", "baud-rate", "usb-device", "pi-ip"])
     except getopt.GetoptError:
-        print('probe.py -i <CSV file> -c <webcam ID> -b <baud rate> -u <Marlin serial USB device>')
+        print('probe.py -i <CSV file> -c <webcam ID> -b <baud rate> -u <Marlin serial USB device> -p <raspberry pi IP>')
         sys.exit(2)
     for opt, arg in opts:
         if opt in ("-h", "--help"):
@@ -84,6 +88,8 @@ def main(argv):
             csv_file = arg.strip()
         elif opt in ("-c", "--cam"):
             webcamid = int(arg.replace(" ", ""))
+        elif opt in ("-p", "--pi-ip"):
+            pi_zero_ip = arg.strip()
         elif opt in ("--skip-homing"):
             skip_homing = True
         elif opt in ("-b", "--baud-rate"):
@@ -95,6 +101,7 @@ def main(argv):
     print('Using Webcam ID: ', webcamid)
     print('Marlin Serial USB Device: ', tty)
     print('Baudrate: ', baud)
+    print('Raspberry Pi IP: ', pi_zero_ip)
 
 
 if __name__ == "__main__":
@@ -127,9 +134,9 @@ pad_hightlight_index = 0;
 camera_to_probe_offset_x = -27.56
 camera_to_probe_offset_y = -0.73
 
-camera_pixels_per_mm = 155  # measured at slightly above work height of 6mm
-camera_pixels_per_mm = 230  # measured at slightly above work height of 1mm
-# camera_pixels_per_mm = 270  # measured at slightly above work height of 6mm
+# camera_pixels_per_mm = 155  # measured at slightly above work height of 6mm
+# camera_pixels_per_mm = 230  # measured at slightly above work height of 1mm
+camera_pixels_per_mm = 270  # measured at slightly above work height of 6mm
 
 frame = None
 frame_cnt = 0
@@ -161,8 +168,8 @@ ana_pas = [0] * 4
 ana_idx = -1
 ana_seq = [0] * 5
 
-# thr_val = [70, 231, 150, 205, 115] # pcb fiducials
-thr_val = [-1, 231, 130, 100, 170]  # testpattern points
+thr_val = [70, 231, 150, 205, 115]  # pcb fiducials
+# thr_val = [-1, 231, 130, 100, 170]  # testpattern points
 # thr_val2 = [-26, 231, 212, 131, 221]  # testpattern points blue
 
 cap = cv2.VideoCapture(webcamid)
@@ -348,7 +355,7 @@ def overlay(img):
     cv2.rectangle(img, (0, fid_hightlight_index * 40 + 125), (8, fid_hightlight_index * 40 + 95), (0, 98, 255), -1)
 
     ovtext(img, "Pad (%d/%d): %s (%s) X: %3.4f Y:%3.4f" % (
-        pad_hightlight_index, len(testpads)-1, testpads[pad_hightlight_index]['partname'],
+        pad_hightlight_index, len(testpads) - 1, testpads[pad_hightlight_index]['partname'],
         testpads[pad_hightlight_index]['net'],
         testpads[pad_hightlight_index]['trans-x'], testpads[pad_hightlight_index]['trans-y']), (10, 320))
 
@@ -356,6 +363,8 @@ def overlay(img):
         ovtext(img, "HOMING", (10, 64))
     elif moving:
         ovtext(img, "MOVING", (10, 64))
+    if measuring_run:
+        ovtext(img, "Probing Run", (20, 64))
     # elif halt:
     #    ovtext(img, "HALTING", (10, 64))
     # elif quit:
@@ -630,12 +639,13 @@ def ender():
                 moving = False
 
             if (res.find("E:0.00 Count".encode()) >= 0):
-                moving = False
                 A = [_.split(b':') for _ in res.rstrip().split(b' ')]
                 ender_X = float(A[0][1])
                 ender_Y = float(A[1][1])
                 ender_Z = float(A[2][1])
                 settle_time = time()
+                if not moveZ_abs:
+                    moving = False
 
             print("N:", res)
 
@@ -820,27 +830,55 @@ try:
                 if (time() > (settle_time + dwell_time)):
                     settle_time = time()
 
-                    f = open("testresults.csv", "a")
-                    # f.write("PARTNAME;TRANSFORMED-X;TRANSFORMED-Y;CENTER-PIXEL-OFFSET-X;CENTER-PIXEL-OFFSET-Y" # HEADER
-                    f.write(testpads[pad_hightlight_index]['partname'] + ";" + str(
-                        testpads[pad_hightlight_index]['trans-x']) + ";" +
-                            str(testpads[pad_hightlight_index]['trans-y']) + ";" + str(ana_pos[0] - 360)
-                            + ";" + str(ana_pos[1] - 360) + "\r\n")
-                    f.close()
                     save_image = testpads[pad_hightlight_index]['partname']
+
 
                     pad_hightlight_index += 1
                     if pad_hightlight_index >= len(testpads) + 1:
                         measuring_run = False
                     else:
-                        move_abs = "X" + str(round(testpads[pad_hightlight_index]['trans-x'], 2)) + " Y" + str(
-                            round(testpads[pad_hightlight_index]['trans-y'], 2))
+                        move_abs = "X" + str(round(testpads[pad_hightlight_index]['trans-x'], 2)+ camera_to_probe_offset_x) + " Y" + str(
+                            round(testpads[pad_hightlight_index]['trans-y'], 2)+ camera_to_probe_offset_y)
+                        moveZ_abs = "Z" + str(probing_height)
 
         if save_image:
-            cv2.imwrite(save_image + "-cam.jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 80])
-            print('Writing Image: ', save_image + "-cam.jpg", [cv2.IMWRITE_JPEG_QUALITY, 80])
-            cv2.imwrite(save_image + "-analysis.jpg", img_ana, [cv2.IMWRITE_JPEG_QUALITY, 80])
-            print('Writing Image: ', save_image + "-analysis.jpg", [cv2.IMWRITE_JPEG_QUALITY, 80])
+            url = 'http://' + pi_zero_ip + ':8080/stream/snapshot.jpeg?delay_s=0'
+            filename = wget.download(url, bar=None)
+            os.rename(filename,
+                      testpads[pad_hightlight_index]['partname'] + "-" + testpads[pad_hightlight_index][
+                          'net'] + '.jpg')
+            print ("Captured Picture: ", testpads[pad_hightlight_index]['partname'] + "-" + testpads[pad_hightlight_index][
+                          'net'] + '.jpg')
+
+            ssh1 = SSHClient()
+            ssh1.set_missing_host_key_policy(AutoAddPolicy())
+            ssh1.connect(pi_zero_ip, username='root')
+            stdin1, stdout1, stderr1 = ssh1.exec_command("head -n1 /dev/ttyS0")
+
+            ssh2 = SSHClient()
+            ssh2.set_missing_host_key_policy(AutoAddPolicy())
+            ssh2.connect(pi_zero_ip, username='root')
+            stdin2, stdout2, stderr2 = ssh2.exec_command('echo -e "A" > /dev/ttyS0')
+            ssh2.close()
+
+            lines = stdout1.readlines()
+            # print(lines)
+
+            ssh1.close()
+
+            f = open("testresults.csv", "a")
+            # f.write("PARTNAME(NETNAME);TRANSFORMED-X;TRANSFORMED-Y;Measurement-Result" # HEADER
+            f.write(
+                testpads[pad_hightlight_index]['partname'] + " (" + testpads[pad_hightlight_index]['net'] + ");" + str(
+                    testpads[pad_hightlight_index]['trans-x']) + ";" +
+                str(testpads[pad_hightlight_index]['trans-y']) + ";" + lines[0])
+            f.close()
+
+            print ("Measurement: " + lines[0])
+        #    cv2.imwrite(save_image + "-cam.jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 80])
+        #    print('Writing Image: ', save_image + "-cam.jpg", [cv2.IMWRITE_JPEG_QUALITY, 80])
+        #    cv2.imwrite(save_image + "-analysis.jpg", img_ana, [cv2.IMWRITE_JPEG_QUALITY, 80])
+        #    print('Writing Image: ', save_image + "-analysis.jpg", [cv2.IMWRITE_JPEG_QUALITY, 80])
             save_image = False
 
         key = cv2.waitKey(1) & 0xFF

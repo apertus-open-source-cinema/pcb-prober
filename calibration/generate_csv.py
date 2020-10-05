@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Copyright (C) 2020 Herbert Poetzl, Sebastian Pichelhofer
+# Copyright (C) 2020 Sebastian Pichelhofer
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
