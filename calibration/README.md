@@ -114,7 +114,7 @@ gpio -g write  13 1
 # OpenCV Image Analysis
 The image is converted to HSV color space.
 
-The 5 filter parameters editable with number keys 1 to 8 do:
+The 5 filter parameters editable with number keys 1 to 0 do:
 ```
 [0] and [1] define the hue (H) range (displayed in red color)
 [2] saturation (S) cut off (displayed in green color)
