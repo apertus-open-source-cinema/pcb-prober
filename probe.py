@@ -32,7 +32,9 @@ import transforms3d as t3d
 from threading import Thread, Condition, Lock
 import wget
 import os
-from paramiko import SSHClient, AutoAddPolicy
+import socket
+
+# from paramiko import SSHClient, AutoAddPolicy
 
 # fifo = posix.open(sys.argv[1], posix.O_WRONLY | posix.O_NONBLOCK)
 
@@ -57,11 +59,13 @@ move_stepsize_xy = 2.0
 move_stepsize_z = 2.0
 focus_height_z = 6.0  # 6mm to protect into crashing PCB
 pcb_height_z = 5.0
-probing_height = 3  # 2.1  # 4.0  # set above the pcb to safety for now, set to 2.3 at this height the probe needle slightly touches the PCB
+probing_height = 2  # 2.1  # 4.0  # set above the pcb to safety for now, set to 2.3 at this height the probe needle slightly touches the PCB
 csv_file = "pcb.csv"
 webcamid = 0
 analyze_filter_id = 6
-pi_zero_ip = "192.168.10.101"
+pi_zero_ip = "192.168.0.1"
+pi_zero_port = 2000
+measurement_count = 4
 
 # current position
 ender_X = 0.0
@@ -188,6 +192,13 @@ cap.set(cv2.CAP_PROP_SATURATION, 0.15)
 
 col = [(0, 0, 255), (0, 200, 255), (255, 50, 50), (0, 200, 0), (255, 255, 255), (0, 0, 0)]
 
+def floatcompare(float1, float2, decimals):
+    #print (float2 - float1)
+    #print(10**-decimals)
+    if (abs(float2 - float1) <= 10**-decimals):
+        return True
+    else:
+        return False
 
 # load test points from CSV file
 
@@ -364,7 +375,7 @@ def overlay(img):
     elif moving:
         ovtext(img, "MOVING", (10, 64))
     if measuring_run:
-        ovtext(img, "Probing Run", (20, 64))
+        ovtext(img, "PROBING RUN", (200, 64))
     # elif halt:
     #    ovtext(img, "HALTING", (10, 64))
     # elif quit:
@@ -644,8 +655,7 @@ def ender():
                 ender_Y = float(A[1][1])
                 ender_Z = float(A[2][1])
                 settle_time = time()
-                if not moveZ_abs:
-                    moving = False
+                moving = False
 
             print("N:", res)
 
@@ -827,59 +837,111 @@ try:
 
         if measuring_run:
             if not moving:
-                if (time() > (settle_time + dwell_time)):
-                    settle_time = time()
+                # print("ender_X=" + str(ender_X) + "| ")
+                # print("target_X=" + str(round(testpads[pad_hightlight_index]['trans-x'] + camera_to_probe_offset_x, 2)))
+                # print("ender_Y=" + str(ender_Y) + "| ")
+                # print("target_Y=" + str(round(testpads[pad_hightlight_index]['trans-y']+ camera_to_probe_offset_y, 2)))
 
-                    save_image = testpads[pad_hightlight_index]['partname']
+                # print("ender_Z=" + ender_Z + "| ")
+                arrived_x = floatcompare(ender_X, testpads[pad_hightlight_index]['trans-x'] + camera_to_probe_offset_x, 1)
+                arrived_y = floatcompare(ender_Y, testpads[pad_hightlight_index]['trans-y'] + camera_to_probe_offset_y, 1)
+                if (arrived_x and arrived_y):
+                    #print("Arrived at Measurement Location")
+                    arrived_z = floatcompare(ender_Z, probing_height, 1)
+                    if (arrived_z):
+                        #print("Probing")
+                        if (time() > (settle_time + dwell_time)):
+                            settle_time = time()
+                            print("Dwell Time passed at Probing Height")
 
+                            url = 'http://' + pi_zero_ip + ':8080/stream/snapshot.jpeg?delay_s=0'
+                            filename = wget.download(url, bar=None)
+                            os.rename(filename,testpads[pad_hightlight_index]['partname'] + "-" + testpads[pad_hightlight_index]['net'] + '.jpg')
+                            print ("Captured Picture: ", testpads[pad_hightlight_index]['partname'] + "-" + testpads[pad_hightlight_index]['net'] + '.jpg')
 
-                    pad_hightlight_index += 1
-                    if pad_hightlight_index >= len(testpads) + 1:
-                        measuring_run = False
+                            #save_image = testpads[pad_hightlight_index]['partname']
+                            print("Starting Measurement:")
+
+                            for i in range(measurement_count):
+                                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                                    s.connect((pi_zero_ip, pi_zero_port))
+                                    s.sendall(b'A')
+                                    measurement_data = s.recv(1024)
+                                    # print('Received', repr(measurement_data))
+                                    f = open("testresults.csv", "a")
+                                    # f.write("PARTNAME(NETNAME);TRANSFORMED-X;TRANSFORMED-Y;Measurement-Result" # HEADER
+                                    f.write(
+                                        testpads[pad_hightlight_index]['partname'] + " (" +
+                                        testpads[pad_hightlight_index][
+                                            'net'] + ");" + str(
+                                            testpads[pad_hightlight_index]['trans-x']) + ";" +
+                                        str(testpads[pad_hightlight_index]['trans-y']) + ";" + repr(measurement_data) + "\r\n")
+                                    f.close()
+                                    print("Measurement: " + repr(measurement_data))
+
+                            pad_hightlight_index += 1
+                            if pad_hightlight_index >= len(testpads) + 1:
+                                measuring_run = False
+                            else:
+                                moveZ_abs = "Z" + str(focus_height_z)
+                                move_abs = "X" + str(round(testpads[pad_hightlight_index]['trans-x'],
+                                                           2) + camera_to_probe_offset_x) + " Y" + str(
+                                    round(testpads[pad_hightlight_index]['trans-y'], 2) + camera_to_probe_offset_y)
                     else:
-                        move_abs = "X" + str(round(testpads[pad_hightlight_index]['trans-x'], 2)+ camera_to_probe_offset_x) + " Y" + str(
-                            round(testpads[pad_hightlight_index]['trans-y'], 2)+ camera_to_probe_offset_y)
                         moveZ_abs = "Z" + str(probing_height)
 
-        if save_image:
-            url = 'http://' + pi_zero_ip + ':8080/stream/snapshot.jpeg?delay_s=0'
-            filename = wget.download(url, bar=None)
-            os.rename(filename,
-                      testpads[pad_hightlight_index]['partname'] + "-" + testpads[pad_hightlight_index][
-                          'net'] + '.jpg')
-            print ("Captured Picture: ", testpads[pad_hightlight_index]['partname'] + "-" + testpads[pad_hightlight_index][
-                          'net'] + '.jpg')
+        #if save_image:
+            # url = 'http://' + pi_zero_ip + ':8080/stream/snapshot.jpeg?delay_s=0'
+            # filename = wget.download(url, bar=None)
+            # os.rename(filename,
+            #           testpads[pad_hightlight_index]['partname'] + "-" + testpads[pad_hightlight_index][
+            #              'net'] + '.jpg')
+            # print ("Captured Picture: ", testpads[pad_hightlight_index]['partname'] + "-" + testpads[pad_hightlight_index][
+            #              'net'] + '.jpg')
 
-            ssh1 = SSHClient()
-            ssh1.set_missing_host_key_policy(AutoAddPolicy())
-            ssh1.connect(pi_zero_ip, username='root')
-            stdin1, stdout1, stderr1 = ssh1.exec_command("head -n1 /dev/ttyS0")
+            #print("Starting Measurement:")
 
-            ssh2 = SSHClient()
-            ssh2.set_missing_host_key_policy(AutoAddPolicy())
-            ssh2.connect(pi_zero_ip, username='root')
-            stdin2, stdout2, stderr2 = ssh2.exec_command('echo -e "A" > /dev/ttyS0')
-            ssh2.close()
+            # this only works if running minicom -c on -b 1000000 -D /dev/ttyS0 -w S0 first to configure the signals
 
-            lines = stdout1.readlines()
+            # for i in range(4):
+            #     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            #         s.connect((pi_zero_ip, pi_zero_port))
+            #         s.sendall(b'A')
+            #         data = s.recv(1024)
+            #         #print('Received', repr(data))
+            #         f = open("testresults.csv", "a")
+            #         # f.write("PARTNAME(NETNAME);TRANSFORMED-X;TRANSFORMED-Y;Measurement-Result" # HEADER
+            #         f.write(
+            #             testpads[pad_hightlight_index]['partname'] + " (" + testpads[pad_hightlight_index][
+            #                 'net'] + ");" + str(
+            #                 testpads[pad_hightlight_index]['trans-x']) + ";" +
+            #             str(testpads[pad_hightlight_index]['trans-y']) + ";" + repr(data) + "\r\n")
+            #         f.close()
+            #         print("Measurement: " + repr(data))
+            #
+            # save_image = False
+            # moveZ_abs = "Z" + str(focus_height_z)  # move back to safe height
+
+            # ssh1 = SSHClient()
+            # ssh1.set_missing_host_key_policy(AutoAddPolicy())
+            # ssh1.connect(pi_zero_ip, username='root')
+            # stdin1, stdout1, stderr1 = ssh1.exec_command("head -n1 /dev/ttyS0")
+
+            # ssh2 = SSHClient()
+            # ssh2.set_missing_host_key_policy(AutoAddPolicy())
+            # ssh2.connect(pi_zero_ip, username='root')
+            # stdin2, stdout2, stderr2 = ssh2.exec_command('echo -e "A" > /dev/ttyS0')
+            # ssh2.close()
+
+            # lines = stdout1.readlines()
             # print(lines)
 
-            ssh1.close()
+            # ssh1.close()
 
-            f = open("testresults.csv", "a")
-            # f.write("PARTNAME(NETNAME);TRANSFORMED-X;TRANSFORMED-Y;Measurement-Result" # HEADER
-            f.write(
-                testpads[pad_hightlight_index]['partname'] + " (" + testpads[pad_hightlight_index]['net'] + ");" + str(
-                    testpads[pad_hightlight_index]['trans-x']) + ";" +
-                str(testpads[pad_hightlight_index]['trans-y']) + ";" + lines[0])
-            f.close()
-
-            print ("Measurement: " + lines[0])
         #    cv2.imwrite(save_image + "-cam.jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 80])
         #    print('Writing Image: ', save_image + "-cam.jpg", [cv2.IMWRITE_JPEG_QUALITY, 80])
         #    cv2.imwrite(save_image + "-analysis.jpg", img_ana, [cv2.IMWRITE_JPEG_QUALITY, 80])
         #    print('Writing Image: ', save_image + "-analysis.jpg", [cv2.IMWRITE_JPEG_QUALITY, 80])
-            save_image = False
 
         key = cv2.waitKey(1) & 0xFF
 
@@ -1018,7 +1080,7 @@ try:
             move_abs = "X" + str(round(testpads[pad_hightlight_index]['trans-x'], 2)) + " Y" + str(
                 round(testpads[pad_hightlight_index]['trans-y'], 2))
 
-        elif key == ord('d'):  # D - move camera to selected testpad
+        elif key == ord('d'):  # D - move probe to selected testpad
             move_abs = "X" + str(
                 round(testpads[pad_hightlight_index]['trans-x'], 2) + camera_to_probe_offset_x) + " Y" + str(
                 testpads[pad_hightlight_index]['trans-y'] + camera_to_probe_offset_y)
@@ -1032,7 +1094,16 @@ try:
             moveZ_abs = "Z" + str(focus_height_z)
 
         elif key == ord('x'):  # measure
-            measuring_run = not measuring_run
+            if not measuring_run:
+                measuring_run = True
+                print("Starting Measurement Run")
+                move_abs = "X" + str(
+                    round(testpads[pad_hightlight_index]['trans-x'], 2) + camera_to_probe_offset_x) + " Y" + str(
+                    testpads[pad_hightlight_index]['trans-y'] + camera_to_probe_offset_y)
+                moveZ_abs = "Z" + str(probing_height)
+            else:
+                measuring_run = False
+                print("Stopping Measurement Run")
 
         elif key == 255:  # nokey
             pass

@@ -5,7 +5,7 @@ technology (3D printer mechanics/controller, raspberry pi, openCV, etc.)
 
 
 # Software Requirements
-Python3, NumPy, keyboard, opencv-python, serial, wget, paramiko
+Python3, NumPy, keyboard, opencv-python, serial, wget
 
 ```
 pip install numpy, keyboard, serial
@@ -26,9 +26,9 @@ ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6010", MODE="0660", GROUP="dialout"
 ```
 # Usage
 ```
-./probe.py -i <CSV file> -c <webcam ID> -b <baud rate> -u <Marlin serial USB device>
+./probe.py -i <CSV file> -c <webcam ID> -b <baud rate> -u <Marlin serial USB device> -p <Raspberry Pi IP>>
 
-./probe.py -u /dev/ttyUSB0 -b 1000000 -c 0 -i probe.csv
+./probe.py -u /dev/ttyUSB0 -b 1000000 -c 0 -i probe.csv -p 192.168.0.1
 ```
 Note that backlash compensation is active and results in each point 
 being approached from the same side. This means that even small distance movements result 
