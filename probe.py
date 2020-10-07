@@ -65,7 +65,7 @@ webcamid = 0
 analyze_filter_id = 6
 pi_zero_ip = "192.168.0.1"
 pi_zero_port = 2000
-measurement_count = 4
+measurement_count = 16
 
 # current position
 ender_X = 0.0
@@ -237,6 +237,18 @@ def loadCSV(filename):
 
 testpads = {}
 loadCSV(csv_file)
+
+for i in range(measurement_count):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.connect((pi_zero_ip, pi_zero_port))
+        s.sendall(b'A')
+        measurement_data = s.recv(1024)
+        # print('Received', repr(measurement_data))
+        f = open("testresults.csv", "a")
+        # f.write("PARTNAME(NETNAME);TRANSFORMED-X;TRANSFORMED-Y;Measurement-Result" # HEADER
+        f.write("AIR;;;" + repr(measurement_data) + "\r\n")
+        f.close()
+        print("Measurement: " + repr(measurement_data))
 
 
 # pprint.pprint(testpads)
