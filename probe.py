@@ -868,11 +868,11 @@ try:
                             url = 'http://' + pi_zero_ip + ':8080/stream/snapshot.jpeg?delay_s=0'
                             filename = wget.download(url, bar=None)
                             os.rename(filename,
-                                      testpads[pad_hightlight_index]['partname'] + "-" + testpads[pad_hightlight_index][
-                                          'net'] + '.jpg')
+                                      testpads[pad_hightlight_index]['partname'].replace("/", "-") + "-" + testpads[pad_hightlight_index][
+                                          'net'].replace("/", "-") + '.jpg')
                             print("Captured Picture: ",
-                                  testpads[pad_hightlight_index]['partname'] + "-" + testpads[pad_hightlight_index][
-                                      'net'] + '.jpg')
+                                  testpads[pad_hightlight_index]['partname'].replace("/", "-") + "-" + testpads[pad_hightlight_index][
+                                      'net'].replace("/", "-") + '.jpg')
 
                             print("Starting Measurement:")
 
