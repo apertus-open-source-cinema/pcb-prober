@@ -192,13 +192,15 @@ cap.set(cv2.CAP_PROP_SATURATION, 0.15)
 
 col = [(0, 0, 255), (0, 200, 255), (255, 50, 50), (0, 200, 0), (255, 255, 255), (0, 0, 0)]
 
+
 def floatcompare(float1, float2, decimals):
-    #print (float2 - float1)
-    #print(10**-decimals)
-    if (abs(float2 - float1) <= 10**-decimals):
+    # print (float2 - float1)
+    # print(10**-decimals)
+    if (abs(float2 - float1) <= 10 ** -decimals):
         return True
     else:
         return False
+
 
 # load test points from CSV file
 
@@ -850,21 +852,27 @@ try:
 
         if measuring_run:
             if not moving:
-                arrived_x = floatcompare(ender_X, testpads[pad_hightlight_index]['trans-x'] + camera_to_probe_offset_x, 1)
-                arrived_y = floatcompare(ender_Y, testpads[pad_hightlight_index]['trans-y'] + camera_to_probe_offset_y, 1)
+                arrived_x = floatcompare(ender_X, testpads[pad_hightlight_index]['trans-x'] + camera_to_probe_offset_x,
+                                         1)
+                arrived_y = floatcompare(ender_Y, testpads[pad_hightlight_index]['trans-y'] + camera_to_probe_offset_y,
+                                         1)
                 if (arrived_x and arrived_y):
-                    #print("Arrived at Measurement Location") #debug
+                    # print("Arrived at Measurement Location") #debug
                     arrived_z = floatcompare(ender_Z, probing_height, 1)
                     if (arrived_z):
-                        #print("Probing") #debug
+                        # print("Probing") #debug
                         if (time() > (settle_time + dwell_time)):
                             settle_time = time()
                             print("Dwell Time passed at Probing Height")
 
                             url = 'http://' + pi_zero_ip + ':8080/stream/snapshot.jpeg?delay_s=0'
                             filename = wget.download(url, bar=None)
-                            os.rename(filename,testpads[pad_hightlight_index]['partname'] + "-" + testpads[pad_hightlight_index]['net'] + '.jpg')
-                            print ("Captured Picture: ", testpads[pad_hightlight_index]['partname'] + "-" + testpads[pad_hightlight_index]['net'] + '.jpg')
+                            os.rename(filename,
+                                      testpads[pad_hightlight_index]['partname'] + "-" + testpads[pad_hightlight_index][
+                                          'net'] + '.jpg')
+                            print("Captured Picture: ",
+                                  testpads[pad_hightlight_index]['partname'] + "-" + testpads[pad_hightlight_index][
+                                      'net'] + '.jpg')
 
                             print("Starting Measurement:")
 
@@ -881,7 +889,8 @@ try:
                                         testpads[pad_hightlight_index][
                                             'net'] + ");" + str(
                                             testpads[pad_hightlight_index]['trans-x']) + ";" +
-                                        str(testpads[pad_hightlight_index]['trans-y']) + ";" + repr(measurement_data) + "\r\n")
+                                        str(testpads[pad_hightlight_index]['trans-y']) + ";" + repr(
+                                            measurement_data) + "\r\n")
                                     f.close()
                                     print("Measurement: " + repr(measurement_data))
 
@@ -896,54 +905,35 @@ try:
                     else:
                         moveZ_abs = "Z" + str(probing_height)
 
-        #if save_image:
-            # url = 'http://' + pi_zero_ip + ':8080/stream/snapshot.jpeg?delay_s=0'
-            # filename = wget.download(url, bar=None)
-            # os.rename(filename,
-            #           testpads[pad_hightlight_index]['partname'] + "-" + testpads[pad_hightlight_index][
-            #              'net'] + '.jpg')
-            # print ("Captured Picture: ", testpads[pad_hightlight_index]['partname'] + "-" + testpads[pad_hightlight_index][
-            #              'net'] + '.jpg')
+        # if save_image:
+        # url = 'http://' + pi_zero_ip + ':8080/stream/snapshot.jpeg?delay_s=0'
+        # filename = wget.download(url, bar=None)
+        # os.rename(filename,
+        #           testpads[pad_hightlight_index]['partname'] + "-" + testpads[pad_hightlight_index][
+        #              'net'] + '.jpg')
+        # print ("Captured Picture: ", testpads[pad_hightlight_index]['partname'] + "-" + testpads[pad_hightlight_index][
+        #              'net'] + '.jpg')
 
-            #print("Starting Measurement:")
+        # print("Starting Measurement:")
 
-            # this only works if running minicom -c on -b 1000000 -D /dev/ttyS0 -w S0 first to configure the signals
+        # this only works if running minicom -c on -b 1000000 -D /dev/ttyS0 -w S0 first to configure the signals
 
-            # for i in range(4):
-            #     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            #         s.connect((pi_zero_ip, pi_zero_port))
-            #         s.sendall(b'A')
-            #         data = s.recv(1024)
-            #         #print('Received', repr(data))
-            #         f = open("testresults.csv", "a")
-            #         # f.write("PARTNAME(NETNAME);TRANSFORMED-X;TRANSFORMED-Y;Measurement-Result" # HEADER
-            #         f.write(
-            #             testpads[pad_hightlight_index]['partname'] + " (" + testpads[pad_hightlight_index][
-            #                 'net'] + ");" + str(
-            #                 testpads[pad_hightlight_index]['trans-x']) + ";" +
-            #             str(testpads[pad_hightlight_index]['trans-y']) + ";" + repr(data) + "\r\n")
-            #         f.close()
-            #         print("Measurement: " + repr(data))
-            #
-            # save_image = False
-            # moveZ_abs = "Z" + str(focus_height_z)  # move back to safe height
-
-            # ssh1 = SSHClient()
-            # ssh1.set_missing_host_key_policy(AutoAddPolicy())
-            # ssh1.connect(pi_zero_ip, username='root')
-            # stdin1, stdout1, stderr1 = ssh1.exec_command("head -n1 /dev/ttyS0")
-
-            # ssh2 = SSHClient()
-            # ssh2.set_missing_host_key_policy(AutoAddPolicy())
-            # ssh2.connect(pi_zero_ip, username='root')
-            # stdin2, stdout2, stderr2 = ssh2.exec_command('echo -e "A" > /dev/ttyS0')
-            # ssh2.close()
-
-            # lines = stdout1.readlines()
-            # print(lines)
-
-            # ssh1.close()
-
+        # for i in range(4):
+        #     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        #         s.connect((pi_zero_ip, pi_zero_port))
+        #         s.sendall(b'A')
+        #         data = s.recv(1024)
+        #         #print('Received', repr(data))
+        #         f = open("testresults.csv", "a")
+        #         # f.write("PARTNAME(NETNAME);TRANSFORMED-X;TRANSFORMED-Y;Measurement-Result" # HEADER
+        #         f.write(
+        #             testpads[pad_hightlight_index]['partname'] + " (" + testpads[pad_hightlight_index][
+        #                 'net'] + ");" + str(
+        #                 testpads[pad_hightlight_index]['trans-x']) + ";" +
+        #             str(testpads[pad_hightlight_index]['trans-y']) + ";" + repr(data) + "\r\n")
+        #         f.close()
+        #         print("Measurement: " + repr(data))
+        #
         #    cv2.imwrite(save_image + "-cam.jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 80])
         #    print('Writing Image: ', save_image + "-cam.jpg", [cv2.IMWRITE_JPEG_QUALITY, 80])
         #    cv2.imwrite(save_image + "-analysis.jpg", img_ana, [cv2.IMWRITE_JPEG_QUALITY, 80])
@@ -1110,6 +1100,10 @@ try:
             else:
                 measuring_run = False
                 print("Stopping Measurement Run")
+
+        elif key == ord('j'):  # J - save fiducial locations to file
+            safetofile()
+            print("prober.json saved")
 
         elif key == 255:  # nokey
             pass

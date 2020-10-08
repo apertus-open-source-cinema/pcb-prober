@@ -60,6 +60,8 @@ p = increase Stepsize(Z) - limit: 2mm
 
 h = manually home machine - normally performed at startup
 
+j = save fiducial locations to file (prober.json)
+
 TAB = cycle selection through the 4 fiducials
 
 ENTER = move camera to selected fiducial
