@@ -32,6 +32,7 @@ import transforms3d as t3d
 from threading import Thread, Condition, Lock
 import wget
 import os
+from datetime import datetime
 import socket
 
 # from paramiko import SSHClient, AutoAddPolicy
@@ -228,6 +229,8 @@ def loadCSV(filename):
                 if (row[1] == "FID4"):
                     fid4_detected = True
                 testpads[int(row[0])]['net'] = row[10]
+                testpads[int(row[0])]['pad-id'] = row[3]
+                testpads[int(row[0])]['pad-name'] = row[4]
                 testpads[int(row[0])]['trans-x'] = 0.0
                 testpads[int(row[0])]['trans-y'] = 0.0
 
@@ -241,6 +244,17 @@ def loadCSV(filename):
 testpads = {}
 loadCSV(csv_file)
 
+f = open("testresults.csv", "a")
+
+now = datetime.now()
+# dd/mm/YY H:M:S
+dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
+f.write("########################################################################################\n") # HEADER
+f.write("Starting Measurement Run at " + dt_string + "\n") # HEADER
+f.write("CSV file: " + csv_file + "\n") # HEADER
+f.write("PARTNAME;NETNAME;PAD-ID;PAD-NAME;TRANSFORMED-X;TRANSFORMED-Y;MEASUREMENT-RESULT\n") # HEADER
+
+# Air measurements
 for i in range(measurement_count):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.connect((pi_zero_ip, pi_zero_port))
@@ -248,10 +262,9 @@ for i in range(measurement_count):
         measurement_data = s.recv(1024)
         # print('Received', repr(measurement_data))
         f = open("testresults.csv", "a")
-        # f.write("PARTNAME(NETNAME);TRANSFORMED-X;TRANSFORMED-Y;Measurement-Result" # HEADER
-        f.write("AIR;;;" + repr(measurement_data) + "\r\n")
+        f.write("AIR;;;;;;;" + repr(measurement_data).replace('\\x00', '').replace('A\\t', '').replace('\\n', '').replace("b\'", '').replace("\'", '') + "\r\n")
         f.close()
-        print("Measurement: " + repr(measurement_data))
+        print("Measurement: " + repr(measurement_data).replace('\\x00', '').replace('A\\t', '').replace('\\n', '').replace('\\n', '').replace("b\'", '').replace("\'", ''))
 
 
 # pprint.pprint(testpads)
@@ -883,16 +896,17 @@ try:
                                     measurement_data = s.recv(1024)
                                     # print('Received', repr(measurement_data))
                                     f = open("testresults.csv", "a")
-                                    # f.write("PARTNAME(NETNAME);TRANSFORMED-X;TRANSFORMED-Y;Measurement-Result" # HEADER
+                                    #PARTNAME;NETNAME;PAD-ID;PAD-NAME;TRANSFORMED-X;TRANSFORMED-Y;Measurement-Result
                                     f.write(
-                                        testpads[pad_hightlight_index]['partname'] + " (" +
-                                        testpads[pad_hightlight_index][
-                                            'net'] + ");" + str(
-                                            testpads[pad_hightlight_index]['trans-x']) + ";" +
-                                        str(testpads[pad_hightlight_index]['trans-y']) + ";" + repr(
-                                            measurement_data) + "\r\n")
+                                        testpads[pad_hightlight_index]['partname'] + ";" +
+                                        testpads[pad_hightlight_index]['net'] + ";" +
+                                        testpads[pad_hightlight_index]['pad-id'] + ";" +
+                                        testpads[pad_hightlight_index]['pad-name'] + ";" +
+                                        str(testpads[pad_hightlight_index]['trans-x']) + ";" +
+                                        str(testpads[pad_hightlight_index]['trans-y']) + ";" +
+                                        repr(measurement_data).replace('\\x00', '').replace('A\\t', '').replace('\\n', '').replace("b\'", '').replace("\'", '') + "\r\n")
                                     f.close()
-                                    print("Measurement: " + repr(measurement_data))
+                                    print("Measurement: " + repr(measurement_data).replace('\\x00', '').replace('A\\t', '').replace('\\n', '').replace("b\'", '').replace("\'", '') + "\r\n")
 
                             pad_hightlight_index += 1
                             if pad_hightlight_index >= len(testpads):
