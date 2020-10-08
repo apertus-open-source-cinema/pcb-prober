@@ -172,7 +172,7 @@ ana_pas = [0] * 4
 ana_idx = -1
 ana_seq = [0] * 5
 
-thr_val = [70, 231, 150, 205, 115]  # pcb fiducials
+thr_val = [70, 231, 169, 254, 140]  # pcb fiducials
 # thr_val = [-1, 231, 130, 100, 170]  # testpattern points
 # thr_val2 = [-26, 231, 212, 131, 221]  # testpattern points blue
 
