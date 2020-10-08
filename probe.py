@@ -26,6 +26,7 @@ import serial
 import errno
 import posix
 import struct
+import re
 from time import sleep, time
 from random import randint
 import transforms3d as t3d
@@ -205,6 +206,15 @@ def floatcompare(float1, float2, decimals):
 
 # load test points from CSV file
 
+def validate_measurement(input):
+    regex = r"^[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][ ][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][ ][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][ ][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][ ][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][ ][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]$"
+    matches = re.finditer(regex, input, re.MULTILINE)
+    for matchNum, match in enumerate(matches, start=1):
+        if (matchNum > 0):
+            return True
+    return False
+
+
 def loadCSV(filename):
     fid1_detected = False
     fid2_detected = False
@@ -245,32 +255,41 @@ testpads = {}
 loadCSV(csv_file)
 
 f = open("testresults.csv", "a")
-
 now = datetime.now()
 # dd/mm/YY H:M:S
 dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
-f.write("########################################################################################\n") # HEADER
-f.write("Starting Measurement Run at " + dt_string + "\n") # HEADER
-f.write("CSV file: " + csv_file + "\n") # HEADER
-f.write("PARTNAME;NETNAME;PAD-ID;PAD-NAME;TRANSFORMED-X;TRANSFORMED-Y;MEASUREMENT-RESULT\n") # HEADER
+f.write("########################################################################################\n")  # HEADER
+f.write("Starting Measurement Run at " + dt_string + "\n")  # HEADER
+f.write("CSV file: " + csv_file + "\n")  # HEADER
+f.write("PARTNAME;NETNAME;PAD-ID;PAD-NAME;TRANSFORMED-X;TRANSFORMED-Y;MEASUREMENT-RESULT\n")  # HEADER
+f.close()
+
+retries = 10
 
 # Air measurements
+f = open("testresults.csv", "a")
 for i in range(measurement_count):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        attempt = 0
         s.connect((pi_zero_ip, pi_zero_port))
-        s.sendall(b'A')
-        measurement_data = s.recv(1024)
-        # print('Received', repr(measurement_data))
-        f = open("testresults.csv", "a")
-        f.write("AIR;;;;;;;" + repr(measurement_data).replace('\\x00', '').replace('A\\t', '').replace('\\n', '').replace("b\'", '').replace("\'", '') + "\r\n")
-        f.close()
-        print("Measurement: " + repr(measurement_data).replace('\\x00', '').replace('A\\t', '').replace('\\n', '').replace('\\n', '').replace("b\'", '').replace("\'", ''))
+        while attempt < retries:
+            s.sendall(b'A')
+            measurement_data = s.recv(1024)
+            measurement_data_clean = measurement_data.decode('UTF-8').replace('\\x00', '').replace('A\t', '').replace('\n', '')
+            if (validate_measurement(measurement_data_clean)):
+                f.write("AIR;;;;;;;" + measurement_data_clean + "\r\n")
+                print("Measurement: " + measurement_data_clean)
+                break
+            else:
+                attempt += 1
+        else:
+            print ("ERROR: Air measurement attempts exceeded " + retries + " retries.")
 
+f.close()
 
-# pprint.pprint(testpads)
-# print (testpads) # debug
+# pprint.pprint(testpads) # debug
 
-# beta powerboard
+# AXIOM Beta Powerboard Note:
 # 6;FID1;;0;0;-49.53;-27.305;0;0;0;FID1
 # 7;FID2;;0;0;49.53;-27.305;0;0;0;FID2
 # 8;FID3;;0;0;-49.53;27.305;0;0;0;FID3
@@ -881,36 +900,48 @@ try:
                             url = 'http://' + pi_zero_ip + ':8080/stream/snapshot.jpeg?delay_s=0'
                             filename = wget.download(url, bar=None)
                             os.rename(filename,
-                                      testpads[pad_hightlight_index]['partname'].replace("/", "-") + "-" + testpads[pad_hightlight_index][
+                                      testpads[pad_hightlight_index]['partname'].replace("/", "-") + "-" +
+                                      testpads[pad_hightlight_index][
                                           'net'].replace("/", "-") + '.jpg')
                             print("Captured Picture: ",
-                                  testpads[pad_hightlight_index]['partname'].replace("/", "-") + "-" + testpads[pad_hightlight_index][
+                                  testpads[pad_hightlight_index]['partname'].replace("/", "-") + "-" +
+                                  testpads[pad_hightlight_index][
                                       'net'].replace("/", "-") + '.jpg')
 
                             print("Starting Measurement:")
 
+                            retries = 10
                             for i in range(measurement_count):
                                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                                    attempt = 0
                                     s.connect((pi_zero_ip, pi_zero_port))
-                                    s.sendall(b'A')
-                                    measurement_data = s.recv(1024)
-                                    # print('Received', repr(measurement_data))
-                                    f = open("testresults.csv", "a")
-                                    #PARTNAME;NETNAME;PAD-ID;PAD-NAME;TRANSFORMED-X;TRANSFORMED-Y;Measurement-Result
-                                    f.write(
-                                        testpads[pad_hightlight_index]['partname'] + ";" +
-                                        testpads[pad_hightlight_index]['net'] + ";" +
-                                        testpads[pad_hightlight_index]['pad-id'] + ";" +
-                                        testpads[pad_hightlight_index]['pad-name'] + ";" +
-                                        str(testpads[pad_hightlight_index]['trans-x']) + ";" +
-                                        str(testpads[pad_hightlight_index]['trans-y']) + ";" +
-                                        repr(measurement_data).replace('\\x00', '').replace('A\\t', '').replace('\\n', '').replace("b\'", '').replace("\'", '') + "\r\n")
-                                    f.close()
-                                    print("Measurement: " + repr(measurement_data).replace('\\x00', '').replace('A\\t', '').replace('\\n', '').replace("b\'", '').replace("\'", '') + "\r\n")
+                                    while attempt < retries:
+                                        s.sendall(b'A')
+                                        measurement_data = s.recv(1024)
+                                        measurement_data_clean = measurement_data.decode().replace('\\x00', '').replace('A\t', '').replace('\n', '')
+                                        if (validate_measurement(measurement_data_clean)):
+                                            # print('Received', repr(measurement_data))
+                                            f = open("testresults.csv", "a")
+                                            f.write(
+                                                testpads[pad_hightlight_index]['partname'] + ";" +
+                                                testpads[pad_hightlight_index]['net'] + ";" +
+                                                testpads[pad_hightlight_index]['pad-id'] + ";" +
+                                                testpads[pad_hightlight_index]['pad-name'] + ";" +
+                                                str(testpads[pad_hightlight_index]['trans-x']) + ";" +
+                                                str(testpads[pad_hightlight_index]['trans-y']) + ";" +
+                                                measurement_data_clean + "\r\n")
+                                            f.close()
+                                            print("Measurement: " + measurement_data_clean)
+                                            break
+                                        else:
+                                            attempt += 1
+                                    else:
+                                        print("ERROR: Measurement attempts exceeded " + retries + " retries at index: " + pad_hightlight_index)
 
                             pad_hightlight_index += 1
                             if pad_hightlight_index >= len(testpads):
                                 measuring_run = False
+                                pad_hightlight_index = len(testpads) - 1
                             else:
                                 moveZ_abs = "Z" + str(focus_height_z)
                                 move_abs = "X" + str(round(testpads[pad_hightlight_index]['trans-x'],
