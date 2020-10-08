@@ -210,29 +210,30 @@ def loadCSV(filename):
     with open(filename, newline='') as csvfile:
         linereader = csv.reader(csvfile, delimiter=';', quotechar='|')
         for row in linereader:
-            if (row[0] == "INDEX" or row[0] == ""):
-                continue  # skip header or empty rows
-            testpads[int(row[0])] = {}
-            testpads[int(row[0])]['x'] = float(row[5])
-            testpads[int(row[0])]['y'] = float(row[6])
-            testpads[int(row[0])]['partname'] = row[1]
-            if (row[1] == "FID1"):
-                fid1_detected = True
-            if (row[1] == "FID2"):
-                fid2_detected = True
-            if (row[1] == "FID3"):
-                fid3_detected = True
-            if (row[1] == "FID4"):
-                fid4_detected = True
-            testpads[int(row[0])]['net'] = row[10]
-            testpads[int(row[0])]['trans-x'] = 0.0
-            testpads[int(row[0])]['trans-y'] = 0.0
+            if len(row) > 0:
+                if (row[0] == "INDEX" or row[0] == ""):
+                    continue  # skip header or empty rows
+                testpads[int(row[0])] = {}
+                testpads[int(row[0])]['x'] = float(row[5])
+                testpads[int(row[0])]['y'] = float(row[6])
+                testpads[int(row[0])]['partname'] = row[1]
+                if (row[1] == "FID1"):
+                    fid1_detected = True
+                if (row[1] == "FID2"):
+                    fid2_detected = True
+                if (row[1] == "FID3"):
+                    fid3_detected = True
+                if (row[1] == "FID4"):
+                    fid4_detected = True
+                testpads[int(row[0])]['net'] = row[10]
+                testpads[int(row[0])]['trans-x'] = 0.0
+                testpads[int(row[0])]['trans-y'] = 0.0
 
     # print (testpads) # debug
     if not fid1_detected or not fid2_detected or not fid3_detected or not fid4_detected:
-        print("CSV: finding 4 fiducials: failed")
+        print("CSV: 4 fiducial identification failed")
     else:
-        print("CSV: finding 4 fiducials: success")
+        print("CSV: 4 fiducials identified successfully")
 
 
 testpads = {}
@@ -849,19 +850,13 @@ try:
 
         if measuring_run:
             if not moving:
-                # print("ender_X=" + str(ender_X) + "| ")
-                # print("target_X=" + str(round(testpads[pad_hightlight_index]['trans-x'] + camera_to_probe_offset_x, 2)))
-                # print("ender_Y=" + str(ender_Y) + "| ")
-                # print("target_Y=" + str(round(testpads[pad_hightlight_index]['trans-y']+ camera_to_probe_offset_y, 2)))
-
-                # print("ender_Z=" + ender_Z + "| ")
                 arrived_x = floatcompare(ender_X, testpads[pad_hightlight_index]['trans-x'] + camera_to_probe_offset_x, 1)
                 arrived_y = floatcompare(ender_Y, testpads[pad_hightlight_index]['trans-y'] + camera_to_probe_offset_y, 1)
                 if (arrived_x and arrived_y):
-                    #print("Arrived at Measurement Location")
+                    #print("Arrived at Measurement Location") #debug
                     arrived_z = floatcompare(ender_Z, probing_height, 1)
                     if (arrived_z):
-                        #print("Probing")
+                        #print("Probing") #debug
                         if (time() > (settle_time + dwell_time)):
                             settle_time = time()
                             print("Dwell Time passed at Probing Height")
@@ -871,7 +866,6 @@ try:
                             os.rename(filename,testpads[pad_hightlight_index]['partname'] + "-" + testpads[pad_hightlight_index]['net'] + '.jpg')
                             print ("Captured Picture: ", testpads[pad_hightlight_index]['partname'] + "-" + testpads[pad_hightlight_index]['net'] + '.jpg')
 
-                            #save_image = testpads[pad_hightlight_index]['partname']
                             print("Starting Measurement:")
 
                             for i in range(measurement_count):
@@ -892,7 +886,7 @@ try:
                                     print("Measurement: " + repr(measurement_data))
 
                             pad_hightlight_index += 1
-                            if pad_hightlight_index >= len(testpads) + 1:
+                            if pad_hightlight_index >= len(testpads):
                                 measuring_run = False
                             else:
                                 moveZ_abs = "Z" + str(focus_height_z)
