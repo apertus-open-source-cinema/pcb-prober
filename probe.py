@@ -283,7 +283,7 @@ for i in range(measurement_count):
             else:
                 attempt += 1
         else:
-            print ("ERROR: Air measurement attempts exceeded " + retries + " retries.")
+            print ("ERROR: Air measurement attempts exceeded " + str(retries) + " retries.")
 
 f.close()
 
@@ -936,7 +936,7 @@ try:
                                         else:
                                             attempt += 1
                                     else:
-                                        print("ERROR: Measurement attempts exceeded " + retries + " retries at index: " + pad_hightlight_index)
+                                        print("ERROR: Measurement attempts exceeded " + retries + " retries at index: " + str(pad_hightlight_index))
 
                             pad_hightlight_index += 1
                             if pad_hightlight_index >= len(testpads):
