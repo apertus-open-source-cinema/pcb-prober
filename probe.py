@@ -277,7 +277,7 @@ for i in range(measurement_count):
             measurement_data = s.recv(1024)
             measurement_data_clean = measurement_data.decode('UTF-8').replace('\\x00', '').replace('A\t', '').replace('\n', '')
             if (validate_measurement(measurement_data_clean)):
-                f.write("AIR;;;;;;;" + measurement_data_clean + "\r\n")
+                f.write("AIR;;;;;;" + measurement_data_clean + "\r\n")
                 print("Measurement: " + measurement_data_clean)
                 break
             else:
