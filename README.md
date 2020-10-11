@@ -110,6 +110,10 @@ f = raise probe to safe height
 
 q = cycle through filter channel display
 
+e = increase camera pixel per mm value by 1
+
+r = decrease camera pixel per mm value by 1
+
 ESCAPE = quit
 
 # Pi Zero

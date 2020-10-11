@@ -142,7 +142,7 @@ camera_to_probe_offset_y = -0.73
 
 # camera_pixels_per_mm = 155  # measured at slightly above work height of 6mm
 # camera_pixels_per_mm = 230  # measured at slightly above work height of 1mm
-camera_pixels_per_mm = 270  # measured at slightly above work height of 6mm
+#camera_pixels_per_mm = 270  # measured at slightly above work height of 6mm
 
 frame = None
 frame_cnt = 0
@@ -382,7 +382,7 @@ def ovtext(img, txt="test", pos=(0, 0), col=(255, 255, 255)):
 
 
 def overlay(img):
-    ox, oy, ow, oh = 4, 4, 1920 - 8, 32
+    ox, oy, ow, oh = 4, 4, 1920 - 8, 68
 
     sub = img[oy:oy + oh, ox:ox + ow]
     img[oy:oy + oh, ox:ox + ow] = sub >> 1  # dark background
@@ -391,7 +391,7 @@ def overlay(img):
     cx, cy, r = int((rx0 + rx1) / 2), int((ry0 + ry1) / 2), 64
 
     # crosshair and center window
-    cv2.rectangle(img, (rx0, ry0), (rx1, ry1), (0, 0, 255), 1)
+    cv2.rectangle(img, (rx0, ry0), (rx1, ry1), (255, 255, 255), 1)
     cv2.line(img, (cx, cy - r), (cx, cy + r), (0, 0, 0), 3)
     cv2.line(img, (cx - r, cy), (cx + r, cy), (0, 0, 0), 3)
     cv2.line(img, (cx, cy - r), (cx, cy + r), (0, 255, 0), 1)
@@ -399,30 +399,40 @@ def overlay(img):
 
     # ovtext(img, "FPS %3.1f" % (frame_fps), (10, 30))
     # ovtext(img, "*%08d" % (prev_frame_cnt), (240, 30))
-    ovtext(img, "X:%3.2f Y:%3.2f Z:%3.2f" % (ender_X, ender_Y, ender_Z), (500, 30))
+    ovtext(img, "X:%3.2f Y:%3.2f Z:%3.2f" % (ender_X, ender_Y, ender_Z), (30, 30))
     ovtext(img, "Stepsize(XY): %3.2fmm Stepsize(Z): %3.2fmm" % (move_stepsize_xy, move_stepsize_z), (1120, 30))
+    ovtext(img, "Camera pixels per mm: %d" % (data['camera_pixels_per_mm']), (1120, 64))
 
     # fiducials
-    ox1, oy1, ow1, oh1 = 0, 90, 760, 240
+    ox1, oy1, ow1, oh1 = 0, 1080-80, 1920, 80
     sub2 = img[oy1:oy1 + oh1, ox1:ox1 + ow1]
     img[oy1:oy1 + oh1, ox1:ox1 + ow1] = sub2 >> 1  # dark background
-    ovtext(img, "Fid 1 (v): %3.4f, %3.4f" % (data['fiducial'][0]['x'], data['fiducial'][0]['y']), (10, 120))
-    ovtext(img, "Fid 2 (b): %3.4f, %3.4f" % (data['fiducial'][1]['x'], data['fiducial'][1]['y']), (10, 160))
-    ovtext(img, "Fid 3 (n): %3.4f, %3.4f" % (data['fiducial'][2]['x'], data['fiducial'][2]['y']), (10, 200))
-    ovtext(img, "Fid 4 (m): %3.4f, %3.4f" % (data['fiducial'][3]['x'], data['fiducial'][3]['y']), (10, 240))
-    cv2.rectangle(img, (0, fid_hightlight_index * 40 + 125), (8, fid_hightlight_index * 40 + 95), (0, 98, 255), -1)
+    ovtext(img, "Fid 1 (v): %3.2f, %3.2f" % (data['fiducial'][0]['x'], data['fiducial'][0]['y']), (30, 1032))
+    ovtext(img, "Fid 2 (b): %3.2f, %3.2f" % (data['fiducial'][1]['x'], data['fiducial'][1]['y']), (30, 1072))
+    ovtext(img, "Fid 3 (n): %3.2f, %3.2f" % (data['fiducial'][2]['x'], data['fiducial'][2]['y']), (520, 1032))
+    ovtext(img, "Fid 4 (m): %3.2f, %3.2f" % (data['fiducial'][3]['x'], data['fiducial'][3]['y']), (520, 1072))
 
-    ovtext(img, "Pad (%d/%d): %s (%s) X: %3.4f Y:%3.4f" % (
+    # fiducial highlight rectangle
+    if fid_hightlight_index == 0:
+        cv2.rectangle(img, (2, 1008), (22, 1038), (0, 98, 255), -1)
+    elif fid_hightlight_index == 1:
+        cv2.rectangle(img, (2, 1048), (22, 1078), (0, 98, 255), -1)
+    elif fid_hightlight_index == 2:
+        cv2.rectangle(img, (492, 1008), (512, 1038), (0, 98, 255), -1)
+    elif fid_hightlight_index == 3:
+        cv2.rectangle(img, (492, 1048), (512, 1078), (0, 98, 255), -1)
+
+    ovtext(img, "Pad (%d/%d): %s (%s)" % (
         pad_hightlight_index, len(testpads) - 1, testpads[pad_hightlight_index]['partname'],
-        testpads[pad_hightlight_index]['net'],
-        testpads[pad_hightlight_index]['trans-x'], testpads[pad_hightlight_index]['trans-y']), (10, 320))
+        testpads[pad_hightlight_index]['net']), (1340, 1032))
+    ovtext(img, "X: %3.4f Y:%3.4f" % (testpads[pad_hightlight_index]['trans-x'], testpads[pad_hightlight_index]['trans-y']), (1340, 1072))
 
     if homing:
-        ovtext(img, "HOMING", (10, 64))
+        ovtext(img, "HOMING", (30, 64))
     elif moving:
-        ovtext(img, "MOVING", (10, 64))
+        ovtext(img, "MOVING", (30, 64))
     if measuring_run:
-        ovtext(img, "PROBING RUN", (200, 64))
+        ovtext(img, "PROBING RUN", (400, 64))
     # elif halt:
     #    ovtext(img, "HALTING", (10, 64))
     # elif quit:
@@ -990,13 +1000,6 @@ try:
             safetofile()
             exit = True
 
-        # elif key == ord('c'):  # continue
-        #    halt = False
-        # elif key == ord('e'):  # enable
-        #    enable = True
-        # elif key == ord('h'):   # halt
-        # halt = True
-
         elif key == ord('q'):  # cycle through image analysing filters
             analyze_filter_id += 1
             if (analyze_filter_id > 6):
@@ -1099,10 +1102,10 @@ try:
 
         elif key == 32:  # Space: center to closest detected circle
             if (ana_pos[0] - 360 < 100 and ana_pos[1] - 360 < 100):
-                print("correction: X:" + str((ana_pos[0] - 360) / camera_pixels_per_mm) + " Y:" + str(
-                    (ana_pos[1] - 360) / -camera_pixels_per_mm))
-                move = "X" + str(round((ana_pos[0] - 360) / camera_pixels_per_mm, 2)) + " Y" + str(
-                    round((ana_pos[1] - 360) / -camera_pixels_per_mm, 2))
+                print("correction: X:" + str((ana_pos[0] - 360) / data['camera_pixels_per_mm']) + " Y:" + str(
+                    (ana_pos[1] - 360) / -data['camera_pixels_per_mm']))
+                move = "X" + str(round((ana_pos[0] - 360) / data['camera_pixels_per_mm'], 2)) + " Y" + str(
+                    round((ana_pos[1] - 360) / -data['camera_pixels_per_mm'], 2))
                 print(move)
 
         # elif key == 106:  # J key: test needle offset
@@ -1149,6 +1152,13 @@ try:
         elif key == ord('j'):  # J - save fiducial locations to file
             safetofile()
             print("prober.json saved")
+
+        elif key == ord('e'):  # E - increase camera per mm value by 1
+            data['camera_pixels_per_mm'] += 1
+        elif key == ord('r'):  # R - decrease camera per mm value by 1
+            data['camera_pixels_per_mm'] -= 1
+            if data['camera_pixels_per_mm'] < 0:
+                data['camera_pixels_per_mm'] = 0
 
         elif key == 255:  # nokey
             pass
