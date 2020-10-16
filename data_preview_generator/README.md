@@ -1,6 +1,11 @@
 # Preview generator for probed data
 
-Usage example:
+## Prerequisites:
+these python modules are required:
+
+```pip install pandas```
+
+## Usage example:
 ```shell script
 ./generate_measurement_result_preview.py \
 -rv=100 \
